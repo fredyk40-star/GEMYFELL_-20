@@ -1,0 +1,17 @@
+{
+  "name": "GEMYFELL @20 Disciplinary Portal",
+  "short_name": "GEMYFELL @20",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#5c1616",
+  "theme_color": "#5c1616",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
