@@ -6,9 +6,14 @@
   <meta name="theme-color" content="#5c1616" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="GEMYFELL @20" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>GEMYFELL @20 Secretariat &amp; Disciplinary Portal</title>
   <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="apple-touch-startup-image" href="splash-screen.png" />
   <link rel="icon" href="icon.svg" type="image/svg+xml" />
   <style>
     :root {
@@ -802,6 +807,82 @@
       font-size: 0.92rem;
     }
 
+    /* In-App PWA Splash Launch Screen */
+    .pwa-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: radial-gradient(circle at center, #5c1616 0%, #300606 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: white;
+      padding: 24px;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+      cursor: pointer;
+    }
+    .pwa-splash.fade-out {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .splash-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: splashPop 0.5s cubic-bezier(0.16, 1.3, 0.35, 1) both;
+    }
+    @keyframes splashPop {
+      from { opacity: 0; transform: scale(0.86); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .splash-emblem {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      border: 3px solid var(--accent);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.5), 0 0 25px rgba(217, 119, 6, 0.35);
+      margin-bottom: 16px;
+      object-fit: cover;
+      background: #440101;
+    }
+    .splash-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #fde68a;
+      background: rgba(217, 119, 6, 0.25);
+      border: 1px solid rgba(217, 119, 6, 0.5);
+      padding: 4px 14px;
+      border-radius: 99px;
+      margin-bottom: 10px;
+    }
+    .splash-title {
+      font-size: 1.55rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin: 0;
+      color: #ffffff;
+    }
+    .splash-subtitle {
+      font-size: 0.85rem;
+      color: #fde68a;
+      margin: 4px 0 20px;
+      letter-spacing: 0.5px;
+    }
+    .splash-spinner {
+      width: 26px;
+      height: 26px;
+      border: 3px solid rgba(217, 119, 6, 0.2);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: splashSpin 0.75s linear infinite;
+    }
+    @keyframes splashSpin {
+      to { transform: rotate(360deg); }
+    }
+
     /* Lock Screen with Shake Effect */
     #lock-screen {
       position: fixed;
@@ -930,13 +1011,24 @@
   </style>
 </head>
 <body>
+  <!-- In-App PWA Splash Launch Screen -->
+  <div id="pwa-splash" class="pwa-splash" onclick="dismissSplash()" aria-hidden="true">
+    <div class="splash-inner">
+      <img src="logo.png" alt="GEMYFELL @20" class="splash-emblem" />
+      <div class="splash-badge">20TH ANNIVERSARY</div>
+      <h1 class="splash-title">GEMYFELL</h1>
+      <p class="splash-subtitle">Gentil Ministry &amp; Prayer Camp</p>
+      <div class="splash-spinner"></div>
+    </div>
+  </div>
+
   <!-- Toast Notification System -->
   <div id="toast-container" aria-live="polite"></div>
 
   <!-- Administrator Sign-in -->
   <div id="lock-screen">
     <div class="lock-box" id="lock-card">
-      <img src="icon.svg" width="56" height="56" alt="GEMYFELL @20" style="margin-bottom:10px; border-radius:50%; border:2px solid var(--accent);" />
+      <img src="logo.png" width="80" height="80" alt="GEMYFELL @20" style="margin-bottom:12px; border-radius:50%; border:2.5px solid var(--accent); box-shadow: 0 4px 16px rgba(0,0,0,0.35); object-fit: cover;" />
       <h2>GEMYFELL @20</h2>
       <p>Secretariat &amp; Disciplinary Portal</p>
       <div id="login-fields">
@@ -961,7 +1053,7 @@
   <!-- Executive Sticky Header -->
   <header>
     <div class="header-content">
-      <img class="header-logo" src="icon.svg" alt="GEMYFELL @20 anniversary logo" />
+      <img class="header-logo" src="logo.png" alt="GEMYFELL @20 anniversary logo" style="object-fit: cover;" />
       <div class="header-copy">
         <span class="header-badge">20th Anniversary Edition</span>
         <h1>GEMYFELL @20 ANNIVERSARY</h1>
@@ -2555,6 +2647,21 @@
     window.addEventListener('offline', () => updateCloudStatus('offline'));
 
     void initializeAdminSession();
+
+    function dismissSplash() {
+      const splash = document.getElementById('pwa-splash');
+      if (!splash || splash.classList.contains('fade-out')) return;
+      splash.classList.add('fade-out');
+      setTimeout(() => { if (splash.parentElement) splash.remove(); }, 420);
+    }
+
+    if (sessionStorage.getItem('gemyfell_splash_seen') === 'true') {
+      const splash = document.getElementById('pwa-splash');
+      if (splash) splash.remove();
+    } else {
+      sessionStorage.setItem('gemyfell_splash_seen', 'true');
+      setTimeout(dismissSplash, 1100);
+    }
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

@@ -1,5 +1,20 @@
-const CACHE_NAME = 'gemyfell-disc-v6';
-const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
+const CACHE_NAME = 'gemyfell-disc-v7';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon.svg',
+  '/icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/logo.png',
+  '/splash-screen.png'
+];
 
 self.addEventListener('install', event => {
   event.waitUntil(

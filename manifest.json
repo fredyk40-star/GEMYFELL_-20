@@ -1,17 +1,37 @@
 {
-  "name": "GEMYFELL @20 Disciplinary Portal",
+  "name": "GEMYFELL @20 Secretariat & Disciplinary Portal",
   "short_name": "GEMYFELL @20",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#5c1616",
+  "orientation": "portrait-primary",
+  "background_color": "#440101",
   "theme_color": "#5c1616",
+  "description": "Official 20th Anniversary Secretariat & Disciplinary Committee Portal for GEMYFELL - Gentil Ministry & Prayer Camp.",
   "icons": [
     {
-      "src": "icon.svg",
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
