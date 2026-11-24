@@ -682,12 +682,12 @@
       width: min(95vw, 680px);
       padding: 6px;
       gap: 4px;
-      border: 1px solid rgba(92, 22, 22, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.58);
       border-radius: 999px;
-      background: rgba(255, 255, 255, 0.96);
-      box-shadow: 0 12px 36px rgba(48, 17, 17, 0.22), 0 2px 8px rgba(15, 23, 42, 0.08);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 12px 36px rgba(48, 17, 17, 0.2), 0 2px 8px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
       scrollbar-width: none;
       transform: translateX(-50%);
       animation: nav-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -722,14 +722,14 @@
       transition: transform 0.2s ease;
     }
     .nav button:hover {
-      background: rgba(92, 22, 22, 0.05);
+      background: rgba(255, 255, 255, 0.38);
       color: var(--primary);
       transform: none;
       box-shadow: none;
     }
     .nav button.active {
       border-color: rgba(217, 119, 6, 0.35);
-      background: linear-gradient(145deg, #fff9ee, #faeae6);
+      background: linear-gradient(145deg, rgba(255, 249, 238, 0.78), rgba(250, 234, 230, 0.72));
       color: var(--primary);
       font-weight: 750;
       box-shadow: 0 3px 12px rgba(92, 22, 22, 0.14);
@@ -1032,19 +1032,23 @@
       <h2>GEMYFELL @20</h2>
       <p>Secretariat &amp; Disciplinary Portal</p>
       <div id="login-fields">
-        <label for="login-phone">Phone Number</label>
-        <input type="tel" id="login-phone" autocomplete="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" />
-        <label for="login-credential">PIN or temporary password</label>
-        <input type="password" id="login-credential" autocomplete="current-password" maxlength="128" />
-        <button id="login-submit" onclick="loginAdmin()">Sign In</button>
+        <form id="admin-login-form" autocomplete="on">
+          <label for="login-phone">Phone Number</label>
+          <input type="tel" id="login-phone" autocomplete="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" />
+          <label for="login-credential">PIN or temporary password</label>
+          <input type="password" id="login-credential" autocomplete="current-password" maxlength="128" />
+          <button id="login-submit" type="submit">Sign In</button>
+        </form>
       </div>
       <div id="pin-setup-fields" class="hidden">
-        <p>A one-time password was accepted. Create a new four-digit PIN to continue.</p>
-        <label for="new-pin">New four-digit PIN</label>
-        <input type="password" id="new-pin" inputmode="numeric" maxlength="4" autocomplete="new-password" />
-        <label for="new-pin-confirm">Confirm new PIN</label>
-        <input type="password" id="new-pin-confirm" inputmode="numeric" maxlength="4" autocomplete="new-password" />
-        <button onclick="completePinSetup()">Set PIN &amp; Sign In</button>
+        <form id="pin-setup-form" autocomplete="on">
+          <p>A one-time password was accepted. Create a new four-digit PIN to continue.</p>
+          <label for="new-pin">New four-digit PIN</label>
+          <input type="password" id="new-pin" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+          <label for="new-pin-confirm">Confirm new PIN</label>
+          <input type="password" id="new-pin-confirm" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+          <button type="submit">Set PIN &amp; Sign In</button>
+        </form>
       </div>
       <p id="pin-error" style="color:#fca5a5; font-size:0.82rem; margin-top:10px; min-height:1.2em;"></p>
     </div>
@@ -2612,11 +2616,13 @@
     }
 
     // Event Listeners & Initialization
-    [document.getElementById('login-phone'), document.getElementById('login-credential')].forEach(input => {
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') void loginAdmin(); });
+    document.getElementById('admin-login-form').addEventListener('submit', event => {
+      event.preventDefault();
+      void loginAdmin();
     });
-    [document.getElementById('new-pin'), document.getElementById('new-pin-confirm')].forEach(input => {
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') void completePinSetup(); });
+    document.getElementById('pin-setup-form').addEventListener('submit', event => {
+      event.preventDefault();
+      void completePinSetup();
     });
     document.getElementById('create-admin-form').addEventListener('submit', event => { void createAdministrator(event); });
     document.getElementById('log-filters').addEventListener('click', event => {
