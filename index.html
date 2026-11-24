@@ -113,6 +113,15 @@
       color: #fde68a;
       opacity: 0.95;
     }
+    .header-session {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      color: #fde68a;
+      font-size: .75rem;
+      text-align: right;
+    }
 
     /* Main Container */
     .container {
@@ -304,6 +313,29 @@
       color: var(--muted);
       pointer-events: none;
     }
+    .cloud-sync-panel {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 14px;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius-md);
+      background: #fffaf0;
+    }
+    .cloud-status { color: #854d0e; font-size: .82rem; font-weight: 700; }
+    .cloud-status.synced { color: #166534; }
+    .cloud-status.offline { color: #475569; }
+    .admin-account { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, 160px) auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .admin-account:last-child { border-bottom: 0; }
+    .admin-account select { padding: 8px; }
+    .temporary-credential { margin-top: 12px; padding: 12px; border: 1px solid var(--accent); border-radius: var(--radius-md); background: #fffbeb; overflow-wrap: anywhere; }
+    .temporary-credential code { display: inline-block; margin: 6px 0; color: var(--primary); font-size: 1.15rem; font-weight: 800; letter-spacing: 2px; }
+    #login-fields label, #pin-setup-fields label { text-align: left; color: white; }
+    #login-fields input, #pin-setup-fields input { margin: 4px 0; }
+    #pin-setup-fields > p { color: #fde68a; }
 
     /* Code of Conduct Cards */
     .rule-card {
@@ -846,6 +878,8 @@
     @media (max-width: 480px) {
       .header-logo { width: 48px; height: 48px; flex-basis: 48px; }
       .header-content { gap: 10px; }
+      .header-session { gap: 4px; font-size: .65rem; }
+      .header-session .button-small { padding: 6px 8px; }
       .header-copy h1 { font-size: 0.9rem; }
       .header-copy p { font-size: 0.72rem; }
       .nav { width: 96vw; gap: 2px; padding: 5px; }
@@ -872,6 +906,7 @@
       #tab-logs { position: absolute; inset: 0; width: 100%; padding: 0; }
       #tab-logs .card { padding: 0; box-shadow: none; border: 0; }
       #tab-logs h2, #tab-logs .toolbar, #tab-logs .filter-pills, #tab-logs .search-box,
+      #tab-logs .cloud-sync-panel,
       #tab-logs .record-actions, #tab-logs .record-item button, .nav, header { display: none !important; }
       .print-letterhead {
         display: block !important;
@@ -898,16 +933,27 @@
   <!-- Toast Notification System -->
   <div id="toast-container" aria-live="polite"></div>
 
-  <!-- Security PIN Lock Screen -->
+  <!-- Administrator Sign-in -->
   <div id="lock-screen">
     <div class="lock-box" id="lock-card">
       <img src="icon.svg" width="56" height="56" alt="GEMYFELL @20" style="margin-bottom:10px; border-radius:50%; border:2px solid var(--accent);" />
       <h2>GEMYFELL @20</h2>
       <p>Secretariat &amp; Disciplinary Portal</p>
-      <input type="password" id="pin-input" maxlength="4" inputmode="numeric" placeholder="••••" aria-label="Portal PIN" autofocus />
-      <input type="password" id="pin-confirm" class="hidden" maxlength="4" inputmode="numeric" placeholder="Confirm PIN" aria-label="Confirm four-digit PIN" />
-      <p id="pin-hint" class="hint">Enter your device PIN.</p>
-      <button id="pin-submit" onclick="unlockApp()">Unlock Portal</button>
+      <div id="login-fields">
+        <label for="login-phone">Phone Number</label>
+        <input type="tel" id="login-phone" autocomplete="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" />
+        <label for="login-credential">PIN or temporary password</label>
+        <input type="password" id="login-credential" autocomplete="current-password" maxlength="128" />
+        <button id="login-submit" onclick="loginAdmin()">Sign In</button>
+      </div>
+      <div id="pin-setup-fields" class="hidden">
+        <p>A one-time password was accepted. Create a new four-digit PIN to continue.</p>
+        <label for="new-pin">New four-digit PIN</label>
+        <input type="password" id="new-pin" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+        <label for="new-pin-confirm">Confirm new PIN</label>
+        <input type="password" id="new-pin-confirm" inputmode="numeric" maxlength="4" autocomplete="new-password" />
+        <button onclick="completePinSetup()">Set PIN &amp; Sign In</button>
+      </div>
       <p id="pin-error" style="color:#fca5a5; font-size:0.82rem; margin-top:10px; min-height:1.2em;"></p>
     </div>
   </div>
@@ -920,6 +966,10 @@
         <span class="header-badge">20th Anniversary Edition</span>
         <h1>GEMYFELL @20 ANNIVERSARY</h1>
         <p>Secretariat &amp; Disciplinary Committee Portal</p>
+      </div>
+      <div class="header-session">
+        <span id="session-admin-name"></span>
+        <button id="logout-button" class="button-small secondary hidden" type="button" onclick="logoutAdmin()">Sign Out</button>
       </div>
     </div>
   </header>
@@ -982,6 +1032,28 @@
             <p>Minor infractions receive an informal verbal reminder. Repeated or serious breaches are officially referred to the Chairman &amp; Disciplinary Panel.</p>
           </div>
         </div>
+      </div>
+
+      <div id="admin-management" class="card hidden">
+        <h2>Administrator Management</h2>
+        <p class="hint">Temporary passwords are displayed only once. Share them privately; the recipient must set a new PIN at first sign-in.</p>
+        <form id="create-admin-form">
+          <label for="new-admin-name">Administrator Name</label>
+          <input id="new-admin-name" name="name" maxlength="100" required />
+          <label for="new-admin-phone">Ghana Phone Number</label>
+          <input id="new-admin-phone" name="phone" type="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" required />
+          <label for="new-admin-role">Role</label>
+          <select id="new-admin-role" name="role" required>
+            <option value="secretary">Secretary</option>
+            <option value="disciplinary">Disciplinary</option>
+            <option value="attendance">Attendance</option>
+            <option value="viewer">Viewer (read only)</option>
+          </select>
+          <button type="submit">Create Administrator</button>
+        </form>
+        <div id="new-admin-result" class="hidden" role="status"></div>
+        <h3>Current Accounts</h3>
+        <div id="admin-list"></div>
       </div>
     </section>
 
@@ -1162,6 +1234,10 @@
         </div>
 
         <h2>Saved Records, Case Status &amp; PDF Report</h2>
+        <div class="cloud-sync-panel">
+          <span id="cloud-status" class="cloud-status" role="status" aria-live="polite">☁️ Cloud Sync Pending</span>
+          <button class="button-small secondary" type="button" onclick="syncCloudRecords(true)">Refresh / Sync Cloud</button>
+        </div>
 
         <!-- Live Search inside Logs -->
         <div class="search-box">
@@ -1224,8 +1300,10 @@
   </nav>
 
   <script>
-    const PIN_KEY = 'gemyfell_device_pin';
     const RECORDS_KEY = 'gemyfell_disc_records';
+    const DELETED_RECORDS_KEY = 'gemyfell_deleted_records';
+    const AUTH_SESSION_KEY = 'gemyfell_admin_session';
+    const PIN_SETUP_TOKEN_KEY = 'gemyfell_pin_setup_token';
     const PHONE_KEY = 'gemyfell_team_phones';
     const EXTRA_MEMBERS_KEY = 'gemyfell_extra_members';
     const STATUSES = ['Present', 'Late', 'Excused', 'Absent'];
@@ -1242,6 +1320,9 @@
     let directorySearchTerm = '';
     let attendanceStatuses = {};
     let editingPhones = false;
+    let cloudOperationQueue = Promise.resolve();
+    let cloudSyncPromise = null;
+    let currentAdmin = null;
 
     // Toast Notification System
     function showToast(message, type = 'success', duration = 3000) {
@@ -1260,70 +1341,239 @@
       }, duration);
     }
 
-    let pinSetupMode = false;
-
-    function initializePinLock() {
-      if (sessionStorage.getItem('gemyfell_unlocked') === 'true') {
-        document.getElementById('lock-screen').classList.add('hidden');
-        return;
-      }
-
-      pinSetupMode = !safeRead(PIN_KEY, '');
-      const confirmInput = document.getElementById('pin-confirm');
-      const submit = document.getElementById('pin-submit');
-      const hint = document.getElementById('pin-hint');
-      if (pinSetupMode) {
-        confirmInput.classList.remove('hidden');
-        submit.textContent = 'Create PIN & Unlock';
-        hint.textContent = 'Create a four-digit PIN stored only on this device.';
-      } else {
-        confirmInput.classList.add('hidden');
-        submit.textContent = 'Unlock Portal';
-        hint.textContent = 'Enter your device PIN.';
+    function readAuthSession() {
+      try {
+        const session = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null');
+        return session && typeof session.token === 'string' && session.admin ? session : null;
+      } catch {
+        return null;
       }
     }
 
-    // PIN setup and unlock remain local to this device.
-    function unlockApp() {
-      const input = document.getElementById('pin-input');
-      const confirmInput = document.getElementById('pin-confirm');
-      const card = document.getElementById('lock-card');
-      const err = document.getElementById('pin-error');
+    function saveAuthSession(token, admin) {
+      const session = { token, admin };
+      sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+      sessionStorage.removeItem(PIN_SETUP_TOKEN_KEY);
+      currentAdmin = admin;
+      finishSignIn();
+    }
 
-      if (pinSetupMode) {
-        if (!/^\d{4}$/.test(input.value)) {
-          err.textContent = 'Choose a four-digit numeric PIN.';
-          input.focus();
-          return;
-        }
-        if (input.value !== confirmInput.value) {
-          err.textContent = 'The PIN entries do not match.';
-          confirmInput.value = '';
-          confirmInput.focus();
-          return;
-        }
-        if (!saveLocal(PIN_KEY, input.value)) return;
-        pinSetupMode = false;
-        completeUnlock();
+    function finishSignIn() {
+      sessionStorage.setItem('gemyfell_unlocked', 'true');
+      document.getElementById('lock-screen').classList.add('hidden');
+      document.getElementById('login-fields').classList.remove('hidden');
+      document.getElementById('pin-setup-fields').classList.add('hidden');
+      document.getElementById('session-admin-name').textContent = currentAdmin
+        ? `${currentAdmin.name} · ${roleLabel(currentAdmin.role)}`
+        : '';
+      document.getElementById('logout-button').classList.remove('hidden');
+      applyRoleAccess();
+      updateCloudStatusFromLocal();
+      if (navigator.onLine) void syncCloudRecords();
+    }
+
+    async function parseApiResponse(response) {
+      let payload;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error('The server returned an invalid response.');
+      }
+      if (!response.ok) {
+        const error = new Error(payload?.error || `Request failed (${response.status}).`);
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
+    }
+
+    async function loginAdmin() {
+      const phone = document.getElementById('login-phone').value.trim();
+      const credential = document.getElementById('login-credential').value;
+      const errorBox = document.getElementById('pin-error');
+      const button = document.getElementById('login-submit');
+      if (!phone || !credential) {
+        errorBox.textContent = 'Enter your phone number and PIN or temporary password.';
         return;
       }
 
-      if (input.value === safeRead(PIN_KEY, '')) {
-        completeUnlock();
-      } else {
-        err.textContent = 'Incorrect PIN. Try again.';
-        card.classList.remove('shake');
-        void card.offsetWidth;
-        card.classList.add('shake');
-        input.value = '';
-        input.focus();
+      button.disabled = true;
+      errorBox.textContent = '';
+      try {
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login', phone, credential })
+        });
+        const payload = await parseApiResponse(response);
+        if (payload.requiresPinSetup) {
+          sessionStorage.setItem(PIN_SETUP_TOKEN_KEY, payload.token);
+          sessionStorage.setItem('gemyfell_pending_admin', JSON.stringify(payload.admin));
+          document.getElementById('login-fields').classList.add('hidden');
+          document.getElementById('pin-setup-fields').classList.remove('hidden');
+          document.getElementById('new-pin').focus();
+          errorBox.textContent = '';
+          return;
+        }
+        saveAuthSession(payload.token, payload.admin);
+        document.getElementById('login-credential').value = '';
+        showToast(`Welcome, ${payload.admin.name}.`, 'success');
+      } catch (error) {
+        errorBox.textContent = error.message;
+      } finally {
+        button.disabled = false;
       }
     }
 
-    function completeUnlock() {
-        document.getElementById('lock-screen').classList.add('hidden');
-        sessionStorage.setItem('gemyfell_unlocked', 'true');
-        showToast('Welcome to GEMYFELL @20 Secretariat Portal', 'info');
+    async function completePinSetup() {
+      const pin = document.getElementById('new-pin').value;
+      const confirmation = document.getElementById('new-pin-confirm').value;
+      const setupToken = sessionStorage.getItem(PIN_SETUP_TOKEN_KEY);
+      const errorBox = document.getElementById('pin-error');
+      if (!/^\d{4}$/.test(pin)) {
+        errorBox.textContent = 'Choose a four-digit numeric PIN.';
+        return;
+      }
+      if (pin !== confirmation) {
+        errorBox.textContent = 'The PIN entries do not match.';
+        return;
+      }
+      if (!setupToken) {
+        errorBox.textContent = 'The temporary sign-in expired. Ask the superadmin for a new temporary password.';
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${setupToken}` },
+          body: JSON.stringify({ action: 'set-pin', pin })
+        });
+        const payload = await parseApiResponse(response);
+        saveAuthSession(payload.token, payload.admin);
+        sessionStorage.removeItem('gemyfell_pending_admin');
+        document.getElementById('new-pin').value = '';
+        document.getElementById('new-pin-confirm').value = '';
+        showToast('Your PIN is set. You are signed in.', 'success');
+      } catch (error) {
+        errorBox.textContent = error.message;
+      }
+    }
+
+    function roleLabel(role) {
+      return ({ superadmin: 'Superadmin', secretary: 'Secretary', disciplinary: 'Disciplinary', attendance: 'Attendance', viewer: 'Viewer' })[role] || 'Administrator';
+    }
+
+    function canReadRecordType(type) {
+      if (!currentAdmin) return false;
+      if (['superadmin', 'secretary', 'viewer'].includes(currentAdmin.role)) return true;
+      if (currentAdmin.role === 'disciplinary') return type === 'Incident Report' || type === 'Meeting Minutes';
+      return currentAdmin.role === 'attendance' && type === 'Attendance';
+    }
+
+    function canWriteRecordType(type) {
+      if (!currentAdmin) return false;
+      if (['superadmin', 'secretary'].includes(currentAdmin.role)) return true;
+      if (currentAdmin.role === 'disciplinary') return type === 'Incident Report' || type === 'Meeting Minutes';
+      return currentAdmin.role === 'attendance' && type === 'Attendance';
+    }
+
+    function applyRoleAccess() {
+      if (!currentAdmin) return;
+      const tabsByRole = {
+        superadmin: ['team', 'roll', 'log', 'messages', 'logs'],
+        secretary: ['team', 'roll', 'log', 'messages', 'logs'],
+        disciplinary: ['team', 'log', 'messages', 'logs'],
+        attendance: ['team', 'roll', 'logs'],
+        viewer: ['team', 'logs']
+      };
+      const allowed = tabsByRole[currentAdmin.role] || ['team'];
+      document.querySelectorAll('.nav [data-tab]').forEach(button => {
+        button.classList.toggle('hidden', !allowed.includes(button.dataset.tab));
+      });
+      document.querySelectorAll('.tab-section').forEach(section => {
+        const name = section.id.replace('tab-', '');
+        if (!allowed.includes(name)) section.classList.add('hidden');
+      });
+      document.getElementById('admin-management').classList.toggle('hidden', currentAdmin.role !== 'superadmin');
+      if (currentAdmin.role === 'superadmin') void loadAdminAccounts();
+
+      const active = document.querySelector('.nav [data-tab].active');
+      if (!active || !allowed.includes(active.dataset.tab)) {
+        const first = document.querySelector(`.nav [data-tab="${allowed[0]}"]`);
+        if (first) switchTab(allowed[0], first);
+      }
+    }
+
+    function expireAdminSession(message = 'Your sign-in expired. Please sign in again.') {
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+      sessionStorage.removeItem(PIN_SETUP_TOKEN_KEY);
+      sessionStorage.removeItem('gemyfell_pending_admin');
+      sessionStorage.removeItem('gemyfell_unlocked');
+      currentAdmin = null;
+      document.getElementById('lock-screen').classList.remove('hidden');
+      document.getElementById('login-fields').classList.remove('hidden');
+      document.getElementById('pin-setup-fields').classList.add('hidden');
+      document.getElementById('session-admin-name').textContent = '';
+      document.getElementById('logout-button').classList.add('hidden');
+      document.getElementById('pin-error').textContent = message;
+      updateCloudStatus('authRequired');
+    }
+
+    async function logoutAdmin() {
+      const session = readAuthSession();
+      if (session?.token && navigator.onLine) {
+        try {
+          await fetch('/api/auth', {
+            method: 'DELETE',
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${session.token}` }
+          });
+        } catch (error) {
+          console.warn('Could not revoke server session during sign out:', error);
+        }
+      }
+      expireAdminSession('Signed out. Enter your phone number and PIN to continue.');
+    }
+
+    async function initializeAdminSession() {
+      const session = readAuthSession();
+      if (!session) {
+        document.getElementById('lock-screen').classList.remove('hidden');
+        const setupToken = sessionStorage.getItem(PIN_SETUP_TOKEN_KEY);
+        if (setupToken) {
+          document.getElementById('login-fields').classList.add('hidden');
+          document.getElementById('pin-setup-fields').classList.remove('hidden');
+          document.getElementById('pin-error').textContent = 'Finish setting your PIN to complete sign-in.';
+          return;
+        }
+        updateCloudStatus(navigator.onLine ? 'authRequired' : 'offline');
+        return;
+      }
+
+      if (navigator.onLine) {
+        try {
+          const response = await fetch('/api/auth', {
+            cache: 'no-store',
+            headers: { Authorization: `Bearer ${session.token}` }
+          });
+          const payload = await parseApiResponse(response);
+          currentAdmin = payload.admin;
+          sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({ ...session, admin: payload.admin }));
+        } catch (error) {
+          if (error.status === 401) {
+            expireAdminSession();
+            return;
+          }
+          currentAdmin = session.admin;
+          console.warn('Using the cached admin session while the server is unavailable:', error);
+        }
+      } else {
+        currentAdmin = session.admin;
+      }
+      finishSignIn();
     }
 
     function safeRead(key, fallback) {
@@ -1352,6 +1602,397 @@
       return Array.isArray(records) ? records : [];
     }
 
+    async function adminApi(method = 'GET', body = null) {
+      const session = readAuthSession();
+      if (!session?.token || currentAdmin?.role !== 'superadmin') {
+        throw new Error('Superadmin access is required.');
+      }
+      const response = await fetch('/api/admins', {
+        method,
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${session.token}`,
+          ...(body ? { 'Content-Type': 'application/json' } : {})
+        },
+        ...(body ? { body: JSON.stringify(body) } : {})
+      });
+      try {
+        return await parseApiResponse(response);
+      } catch (error) {
+        if (error.status === 401) expireAdminSession();
+        throw error;
+      }
+    }
+
+    async function loadAdminAccounts() {
+      if (currentAdmin?.role !== 'superadmin') return;
+      const list = document.getElementById('admin-list');
+      try {
+        const payload = await adminApi();
+        list.innerHTML = payload.admins.map(admin => `
+          <div class="admin-account">
+            <div>
+              <strong>${escapeHtml(admin.name)}</strong>
+              <div class="record-meta">${escapeHtml(admin.phone)} · ${admin.active ? 'Active' : 'Disabled'}</div>
+            </div>
+            ${admin.role === 'superadmin' ? `<strong>${roleLabel(admin.role)} (protected)</strong>` : `
+              <select aria-label="Role for ${escapeHtml(admin.name)}" data-admin-role="${escapeHtml(admin.phone)}">
+                ${['secretary', 'disciplinary', 'attendance', 'viewer'].map(role =>
+                  `<option value="${role}" ${role === admin.role ? 'selected' : ''}>${roleLabel(role)}</option>`
+                ).join('')}
+              </select>
+              <div class="toolbar">
+                <button class="button-small secondary" data-admin-action="save-role" data-phone="${escapeHtml(admin.phone)}">Save Role</button>
+                <button class="button-small gold" data-admin-action="reset-password" data-phone="${escapeHtml(admin.phone)}">New Temp Password</button>
+                <button class="button-small ${admin.active ? 'danger' : 'whatsapp'}" data-admin-action="toggle-active" data-phone="${escapeHtml(admin.phone)}" data-active="${admin.active}">${admin.active ? 'Disable' : 'Enable'}</button>
+              </div>
+            `}
+          </div>`).join('');
+        list.querySelectorAll('[data-admin-action]').forEach(button => button.addEventListener('click', () => {
+          const { adminAction, phone, active } = button.dataset;
+          if (adminAction === 'save-role') void updateAdminRole(phone, list.querySelector(`[data-admin-role="${CSS.escape(phone)}"]`)?.value);
+          if (adminAction === 'reset-password') void resetAdminPassword(phone);
+          if (adminAction === 'toggle-active') void setAdminActive(phone, active !== 'true');
+        }));
+      } catch (error) {
+        list.textContent = error.message || 'Could not load administrator accounts.';
+      }
+    }
+
+    function showTemporaryCredential(password, name) {
+      const result = document.getElementById('new-admin-result');
+      result.classList.remove('hidden');
+      result.innerHTML = `<strong>Temporary password for ${escapeHtml(name)} — shown once:</strong><br><code>${escapeHtml(password)}</code><br><button type="button" class="button-small secondary" onclick="copyTemporaryCredential('${escapeHtml(password)}')">Copy Password</button><p class="hint">Deliver this privately. It expires on first use and cannot be reused.</p>`;
+      result.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    async function copyTemporaryCredential(password) {
+      try {
+        await navigator.clipboard.writeText(password);
+        showToast('Temporary password copied. Share it privately.', 'success');
+      } catch {
+        showToast('Copy failed. Select the displayed password manually.', 'warning');
+      }
+    }
+
+    async function createAdministrator(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        const payload = await adminApi('POST', {
+          action: 'create',
+          name: data.get('name'),
+          phone: data.get('phone'),
+          role: data.get('role')
+        });
+        form.reset();
+        showTemporaryCredential(payload.temporaryPassword, payload.admin.name);
+        await loadAdminAccounts();
+      } catch (error) {
+        showToast(error.message, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function updateAdminRole(phone, role) {
+      if (!role) return;
+      try {
+        await adminApi('PATCH', { phone, role });
+        showToast('Administrator role updated. They must sign in again.', 'success');
+        await loadAdminAccounts();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function setAdminActive(phone, active) {
+      try {
+        await adminApi('PATCH', { phone, active });
+        showToast(active ? 'Administrator account enabled.' : 'Administrator account disabled.', 'success');
+        await loadAdminAccounts();
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    async function resetAdminPassword(phone) {
+      if (!confirm('Create a new one-time password? Existing sessions will be signed out.')) return;
+      try {
+        const payload = await adminApi('POST', { action: 'reset-password', phone });
+        const row = [...document.querySelectorAll('.admin-account')].find(item => item.textContent.includes(phone));
+        const name = row?.querySelector('strong')?.textContent || phone;
+        showTemporaryCredential(payload.temporaryPassword, name);
+        showToast('New one-time password generated.', 'success');
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+    }
+
+    function getPendingCloudDeletes() {
+      const ids = safeRead(DELETED_RECORDS_KEY, []);
+      return Array.isArray(ids) ? ids.map(String) : [];
+    }
+
+    function updateCloudStatus(state) {
+      const indicator = document.getElementById('cloud-status');
+      if (!indicator) return;
+      const states = {
+        syncing: ['☁️ Syncing Cloud…', ''],
+        synced: ['☁️ Cloud Synced', 'synced'],
+        offline: ['📴 Offline Mode', 'offline'],
+        pending: ['☁️ Cloud Sync Pending', ''],
+        authRequired: ['🔐 Sign In Required', 'offline'],
+        authFailed: ['🔒 Session Expired', 'offline']
+      };
+      const [text, className] = states[state] || states.pending;
+      indicator.textContent = text;
+      indicator.className = `cloud-status ${className}`;
+    }
+
+    function updateCloudStatusFromLocal() {
+      if (!navigator.onLine) {
+        updateCloudStatus('offline');
+        return;
+      }
+      if (!currentAdmin || !readAuthSession()?.token) {
+        updateCloudStatus('authRequired');
+        return;
+      }
+      const hasPendingRecords = getRecords().some(record => record._cloudSynced !== true);
+      updateCloudStatus(hasPendingRecords || getPendingCloudDeletes().length ? 'pending' : 'synced');
+    }
+
+    function cloudErrorStatus(error) {
+      if (error?.code === 'AUTH_REQUIRED') return 'authRequired';
+      if (error?.code === 'AUTH_FAILED') return 'authFailed';
+      return 'offline';
+    }
+
+    function getAdminToken() {
+      return readAuthSession()?.token || '';
+    }
+
+    function enqueueCloudOperation(operation) {
+      const next = cloudOperationQueue.then(operation, operation);
+      cloudOperationQueue = next.catch(error => {
+        console.error('Cloud sync operation failed:', error);
+      });
+      return next;
+    }
+
+    function cloudRecordPayload(record) {
+      return {
+        id: String(record.id),
+        type: String(record.type || ''),
+        date: String(record.date || ''),
+        title: String(record.title || ''),
+        status: record.status == null ? '' : String(record.status),
+        recorder: record.recorder == null ? '' : String(record.recorder),
+        details: JSON.stringify({
+          format: 'gemyfell-record-v1',
+          details: String(record.details || ''),
+          outcome: record.outcome || '',
+          statuses: record.statuses || null
+        }),
+        created_at: record.createdAt || record.created_at || new Date().toISOString()
+      };
+    }
+
+    function cloudRowToRecord(row) {
+      let payload = null;
+      try {
+        const parsed = JSON.parse(row.details || '');
+        if (parsed && parsed.format === 'gemyfell-record-v1') payload = parsed;
+      } catch {
+        // Older records may store plain text in the details column.
+      }
+
+      return {
+        id: String(row.id),
+        type: row.type || '',
+        date: row.date || '',
+        title: row.title || '',
+        status: row.status || '',
+        recorder: row.recorder || '',
+        details: payload ? payload.details : (row.details || ''),
+        outcome: payload ? payload.outcome : '',
+        statuses: payload ? payload.statuses : undefined,
+        createdAt: row.created_at || '',
+        _cloudSynced: true
+      };
+    }
+
+    async function requestCloud(method, record, id) {
+      const token = getAdminToken();
+      if (!token) {
+        const error = new Error('Please sign in again.');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      const url = method === 'DELETE'
+        ? `/api/records?id=${encodeURIComponent(String(id))}`
+        : '/api/records';
+      const options = {
+        method,
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      if (record) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(record);
+      }
+      const response = await fetch(url, options);
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+      if (!response.ok) {
+        const error = new Error(result?.error || `Cloud request failed (${response.status}).`);
+        if (response.status === 401) {
+          error.code = 'AUTH_FAILED';
+          expireAdminSession();
+        }
+        throw error;
+      }
+      return result;
+    }
+
+    function markRecordCloudSynced(id) {
+      if (getPendingCloudDeletes().includes(String(id))) return false;
+      const records = getRecords();
+      const index = records.findIndex(record => String(record.id) === String(id));
+      if (index < 0) return true;
+      records[index] = { ...records[index], _cloudSynced: true };
+      return saveLocal(RECORDS_KEY, records);
+    }
+
+    function removeCloudDeleteMarker(id) {
+      return saveLocal(
+        DELETED_RECORDS_KEY,
+        getPendingCloudDeletes().filter(pendingId => pendingId !== String(id))
+      );
+    }
+
+    async function deleteCloudRecordDirect(id) {
+      await requestCloud('DELETE', null, id);
+      if (!removeCloudDeleteMarker(id)) throw new Error('Could not clear the local cloud-delete queue.');
+    }
+
+    function queueRecordForCloud(record) {
+      return enqueueCloudOperation(async () => {
+        const id = String(record.id);
+        try {
+          if (getPendingCloudDeletes().includes(id)) {
+            await deleteCloudRecordDirect(id);
+          } else {
+            updateCloudStatus('syncing');
+            await requestCloud('POST', cloudRecordPayload(record));
+            if (getPendingCloudDeletes().includes(id)) {
+              await deleteCloudRecordDirect(id);
+            } else if (!markRecordCloudSynced(id)) {
+              updateCloudStatus('offline');
+              return false;
+            }
+          }
+          updateCloudStatusFromLocal();
+          return true;
+        } catch (error) {
+          console.warn('Record remains saved locally; cloud upload failed:', error);
+          updateCloudStatus(cloudErrorStatus(error));
+          return false;
+        }
+      });
+    }
+
+    function syncCloudRecords(showResult = false) {
+      if (cloudSyncPromise) return cloudSyncPromise;
+      cloudSyncPromise = enqueueCloudOperation(async () => {
+        if (!currentAdmin || !getAdminToken()) {
+          updateCloudStatus('authRequired');
+          if (showResult) showToast('Sign in before syncing cloud records.', 'warning');
+          return false;
+        }
+        updateCloudStatus('syncing');
+        let hasFailures = false;
+        try {
+          for (const id of getPendingCloudDeletes()) {
+            try {
+              await deleteCloudRecordDirect(id);
+            } catch (error) {
+              hasFailures = true;
+              console.warn('Cloud delete remains queued:', error);
+            }
+          }
+
+          const pendingDeleteIds = new Set(getPendingCloudDeletes());
+          const pendingRecords = getRecords().filter(record =>
+            record._cloudSynced !== true &&
+            !pendingDeleteIds.has(String(record.id)) &&
+            canWriteRecordType(record.type)
+          );
+          for (const record of pendingRecords) {
+            try {
+              await requestCloud('POST', cloudRecordPayload(record));
+              if (!markRecordCloudSynced(record.id)) hasFailures = true;
+            } catch (error) {
+              hasFailures = true;
+              console.warn('Record remains saved locally; cloud upload failed:', error);
+            }
+          }
+
+          const cloudRows = await requestCloud('GET');
+          if (!Array.isArray(cloudRows)) throw new Error('Cloud returned an invalid records response.');
+
+          const deletedIds = new Set(getPendingCloudDeletes());
+          const merged = new Map();
+          cloudRows.forEach(row => {
+            const record = cloudRowToRecord(row);
+            if (!deletedIds.has(record.id) && canReadRecordType(record.type)) merged.set(record.id, record);
+          });
+          getRecords().forEach(record => {
+            const id = String(record.id);
+            if (canReadRecordType(record.type) && !deletedIds.has(id) && (!merged.has(id) || record._cloudSynced !== true)) {
+              merged.set(id, record);
+            }
+          });
+
+          const mergedRecords = [...merged.values()].sort((left, right) =>
+            Date.parse(right.createdAt || right.created_at || '') -
+            Date.parse(left.createdAt || left.created_at || '')
+          );
+          if (!saveLocal(RECORDS_KEY, mergedRecords)) {
+            throw new Error('Could not update the local records cache.');
+          }
+          renderRecords();
+          updateCloudStatus(hasFailures ? 'offline' : 'synced');
+          if (showResult) {
+            showToast(hasFailures
+              ? 'Some records remain queued on this device.'
+              : 'Cloud records refreshed successfully.', hasFailures ? 'warning' : 'success');
+          }
+          return !hasFailures;
+        } catch (error) {
+          console.warn('Cloud refresh failed; local records are unchanged:', error);
+          updateCloudStatus(cloudErrorStatus(error));
+          if (showResult) {
+            showToast(error.code === 'CLOUD_AUTH_FAILED'
+              ? 'The cloud sync key was rejected. Check it and try again.'
+              : 'Cloud unavailable. Your local records remain available.', 'warning');
+          }
+          return false;
+        }
+      }).finally(() => {
+        cloudSyncPromise = null;
+      });
+      return cloudSyncPromise;
+    }
+
     function escapeHtml(value) {
       return String(value ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1369,7 +2010,10 @@
         target.style.animation = '';
       }
       document.querySelectorAll('.nav button').forEach(item => item.classList.toggle('active', item === button));
-      if (name === 'logs') renderRecords();
+      if (name === 'logs') {
+        renderRecords();
+        void syncCloudRecords();
+      }
       if (name === 'roll') renderRollCall();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -1578,9 +2222,17 @@
     }
 
     function storeRecord(record) {
+      if (!currentAdmin || !canWriteRecordType(record.type)) {
+        showToast('Your account role cannot save this type of record.', 'error');
+        return false;
+      }
+      record.createdAt = record.createdAt || new Date().toISOString();
+      record._cloudSynced = false;
       const records = getRecords();
       records.unshift(record);
-      return saveLocal(RECORDS_KEY, records);
+      if (!saveLocal(RECORDS_KEY, records)) return false;
+      void queueRecordForCloud(record);
+      return true;
     }
 
     function saveLog() {
@@ -1616,6 +2268,7 @@
           type,
           date: document.getElementById('min-date').value || localDateValue(),
           title: 'Committee Meeting Minutes',
+          recorder: document.getElementById('min-recorded-by').value,
           details: `Recorded By: ${document.getElementById('min-recorded-by').value}\nMembers Present: ${document.getElementById('min-present').value.trim() || 'Not recorded'}\nCases Reviewed & Decisions: ${notes}`
         };
         ['min-date', 'min-present', 'min-notes'].forEach(id => document.getElementById(id).value = '');
@@ -1699,7 +2352,9 @@
 
     function renderRecords() {
       const list = document.getElementById('records-list');
-      const records = getRecords().filter(record => recordMatches(record, activeFilter, logsSearchTerm));
+      const records = getRecords()
+        .filter(record => canReadRecordType(record.type))
+        .filter(record => recordMatches(record, activeFilter, logsSearchTerm));
       
       if (!records.length) {
         list.innerHTML = `
@@ -1753,6 +2408,10 @@
     function resolveCase(id) {
       const record = getRecords().find(item => String(item.id) === String(id));
       if (!record) return;
+      if (!canWriteRecordType(record.type)) {
+        showToast('Your account role cannot resolve this case.', 'error');
+        return;
+      }
       const outcome = prompt('Enter the committee’s final ruling or resolution outcome:', '');
       if (outcome === null || !outcome.trim()) return;
       const records = getRecords();
@@ -1761,9 +2420,12 @@
       records[index] = {
         ...records[index],
         status: 'Resolved',
-        outcome: [previousOutcome, `${new Date().toLocaleString()}: ${outcome.trim()}`].filter(Boolean).join('\n')
+        outcome: [previousOutcome, `${new Date().toLocaleString()}: ${outcome.trim()}`].filter(Boolean).join('\n'),
+        _cloudSynced: false,
+        createdAt: records[index].createdAt || new Date().toISOString()
       };
       if (saveLocal(RECORDS_KEY, records)) {
+        void queueRecordForCloud(records[index]);
         showToast('Case resolved and committee outcome recorded.', 'success');
         renderRecords();
       }
@@ -1777,14 +2439,36 @@
     }
 
     function deleteRecord(id) {
+      const recordId = String(id);
+      const record = getRecords().find(item => String(item.id) === recordId);
+      if (!record || !canWriteRecordType(record.type)) {
+        showToast('Your account role cannot delete this record.', 'error');
+        return;
+      }
       if (!confirm('Are you sure you want to delete this official record? This cannot be undone.')) return;
-      saveLocal(RECORDS_KEY, getRecords().filter(record => String(record.id) !== String(id)));
+      const previousDeletes = getPendingCloudDeletes();
+      if (!saveLocal(DELETED_RECORDS_KEY, [...new Set([...previousDeletes, recordId])])) return;
+      const remainingRecords = getRecords().filter(record => String(record.id) !== recordId);
+      if (!saveLocal(RECORDS_KEY, remainingRecords)) {
+        saveLocal(DELETED_RECORDS_KEY, previousDeletes);
+        return;
+      }
+      void enqueueCloudOperation(async () => {
+        try {
+          updateCloudStatus('syncing');
+          await deleteCloudRecordDirect(recordId);
+          updateCloudStatusFromLocal();
+        } catch (error) {
+          console.warn('Record deletion remains queued on this device:', error);
+          updateCloudStatus(cloudErrorStatus(error));
+        }
+      });
       showToast('Record deleted.', 'info');
       renderRecords();
     }
 
     function exportRecords() {
-      const records = getRecords();
+      const records = getRecords().filter(record => canReadRecordType(record.type));
       if (!records.length) {
         showToast('No records to export yet.', 'warning');
         return;
@@ -1836,9 +2520,13 @@
     }
 
     // Event Listeners & Initialization
-    [document.getElementById('pin-input'), document.getElementById('pin-confirm')].forEach(input => {
-      input.addEventListener('keydown', event => { if (event.key === 'Enter') unlockApp(); });
+    [document.getElementById('login-phone'), document.getElementById('login-credential')].forEach(input => {
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') void loginAdmin(); });
     });
+    [document.getElementById('new-pin'), document.getElementById('new-pin-confirm')].forEach(input => {
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') void completePinSetup(); });
+    });
+    document.getElementById('create-admin-form').addEventListener('submit', event => { void createAdministrator(event); });
     document.getElementById('log-filters').addEventListener('click', event => {
       const button = event.target.closest('[data-filter]');
       if (!button) return;
@@ -1859,8 +2547,14 @@
     renderDirectory();
     renderRollCall();
     updateMessagePreview();
+    updateCloudStatus(!navigator.onLine ? 'offline' : 'authRequired');
+    window.addEventListener('online', () => {
+      if (readAuthSession()) void syncCloudRecords();
+      else updateCloudStatus('authRequired');
+    });
+    window.addEventListener('offline', () => updateCloudStatus('offline'));
 
-    initializePinLock();
+    void initializeAdminSession();
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

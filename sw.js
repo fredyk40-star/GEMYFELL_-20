@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gemyfell-disc-v4';
+const CACHE_NAME = 'gemyfell-disc-v6';
 const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', event => {
@@ -20,6 +20,12 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin === self.location.origin && requestUrl.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
