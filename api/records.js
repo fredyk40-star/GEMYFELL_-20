@@ -34,6 +34,24 @@ function requestBody(req) {
   return null;
 }
 
+function auditStatement(entry) {
+  return {
+    sql: `INSERT INTO record_audit
+      (record_id, record_type, action, actor_phone, actor_name, actor_role, detail, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      entry.id,
+      entry.type,
+      entry.action,
+      entry.admin.phone,
+      entry.admin.name,
+      entry.admin.role,
+      entry.detail || '',
+      new Date().toISOString()
+    ]
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const method = req.method || 'GET';
@@ -55,6 +73,19 @@ export default async function handler(req, res) {
         recorder TEXT,
         details TEXT,
         created_at TEXT
+      )
+    `);
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS record_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        record_id TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor_phone TEXT NOT NULL,
+        actor_name TEXT NOT NULL,
+        actor_role TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
       )
     `);
 
@@ -91,32 +122,61 @@ export default async function handler(req, res) {
         return sendError(res, 403, 'Your role cannot create or update this record type.');
       }
 
-      await db.execute({
-        sql: `INSERT OR REPLACE INTO records
-          (id, type, date, title, status, recorder, details, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          String(record.id),
-          String(record.type),
-          String(record.date),
-          String(record.title),
-          record.status == null ? '' : String(record.status),
-          record.recorder == null ? '' : String(record.recorder),
-          record.details == null ? '' : String(record.details),
-          record.created_at ? String(record.created_at) : new Date().toISOString()
-        ]
+      const id = String(record.id);
+      const type = String(record.type);
+      const existing = await db.execute({
+        sql: 'SELECT type FROM records WHERE id = ?',
+        args: [id]
       });
+      const action = existing.rows.length ? 'update' : 'create';
+      await db.batch([
+        {
+          sql: `INSERT OR REPLACE INTO records
+            (id, type, date, title, status, recorder, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            id,
+            type,
+            String(record.date),
+            String(record.title),
+            record.status == null ? '' : String(record.status),
+            record.recorder == null ? '' : String(record.recorder),
+            record.details == null ? '' : String(record.details),
+            record.created_at ? String(record.created_at) : new Date().toISOString()
+          ]
+        },
+        auditStatement({
+          id,
+          type,
+          action,
+          admin,
+          detail: `${action === 'create' ? 'Created' : 'Updated'} ${String(record.title)}`
+        })
+      ], 'write');
       return res.status(200).json({ success: true });
     }
 
     const id = typeof req.query?.id === 'string' ? req.query.id.trim() : '';
     if (!id) return sendError(res, 400, 'A record id query parameter is required.');
 
-    const existing = await db.execute({ sql: 'SELECT type FROM records WHERE id = ?', args: [id] });
+    const existing = await db.execute({
+      sql: 'SELECT type, title FROM records WHERE id = ?',
+      args: [id]
+    });
     if (existing.rows.length && !canWriteType(admin.role, String(existing.rows[0].type))) {
       throw new ApiError(403, 'Your role cannot delete this record type.');
     }
-    await db.execute({ sql: 'DELETE FROM records WHERE id = ?', args: [id] });
+    const row = existing.rows[0];
+    await db.batch([
+      { sql: 'DELETE FROM records WHERE id = ?', args: [id] },
+      auditStatement({
+        id,
+        type: row ? String(row.type) : 'Unknown',
+        action: 'delete',
+        admin,
+        detail: row ? `Deleted ${String(row.title)}` : 'Deleted a record that was already removed'
+      })
+    ], 'write');
     return res.status(200).json({ success: true });
   } catch (error) {
     return sendApiError(res, error);

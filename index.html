@@ -683,6 +683,73 @@
     .summary-count.late strong { color: #b45309; }
     .summary-count.excused strong { color: #1d4ed8; }
     .summary-count.absent strong { color: #b91c1c; }
+    .summary-count small {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .dashboard-grid { grid-template-columns: repeat(4, 1fr); }
+    .dashboard-actions { flex-wrap: wrap; }
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .activity-item:last-child { border-bottom: 0; }
+    .activity-dot {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 10px;
+      margin-top: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .activity-dot.resolved { background: #15803d; }
+    .activity-dot.attendance { background: #0284c7; }
+    .activity-dot.minutes { background: #64748b; }
+    .activity-copy { min-width: 0; flex: 1; }
+    .activity-copy strong { display: block; font-size: 0.9rem; }
+    .activity-copy span { font-size: 0.75rem; color: var(--muted); }
+    .date-range {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 8px;
+      margin: 10px 0;
+    }
+    .date-range label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 650;
+      color: var(--muted);
+    }
+    .date-range input { min-width: 130px; padding: 8px 10px; font-size: 16px; }
+    .audit-item {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .audit-item:last-child { border-bottom: 0; }
+    .audit-item strong { color: var(--primary); }
+    .audit-action {
+      display: inline-block;
+      padding: 2px 8px;
+      margin-right: 6px;
+      border-radius: 99px;
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 0.68rem;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+    .audit-action.create { background: #dcfce7; color: #166534; }
+    .audit-action.update { background: #fef3c7; color: #92400e; }
+    .audit-action.delete { background: #fee2e2; color: #991b1b; }
 
     /* Case Status Badges */
     .status-badge {
@@ -1121,7 +1188,7 @@
       .nav button svg { width: 17px; height: 17px; }
       .nav button[data-tab="log"] { flex-basis: 54px; min-width: 54px; margin-top: -18px; padding: 9px 2px 7px; }
       .nav button[data-tab="log"] svg { width: 19px; height: 19px; }
-      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .summary-grid, .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
       .directory-grid { grid-template-columns: 1fr; }
       .card { padding: 16px; border-radius: var(--radius-md); }
     }
@@ -1149,6 +1216,7 @@
       #tab-logs { position: absolute; inset: 0; width: 100%; padding: 0; }
       #tab-logs .card { padding: 0; box-shadow: none; border: 0; }
       #tab-logs h2, #tab-logs .toolbar, #tab-logs .filter-pills, #tab-logs .search-box,
+      #tab-logs .date-range, #tab-logs .audit-card,
       #tab-logs .cloud-sync-panel,
       #tab-logs .record-actions, #tab-logs .record-item button, .nav, header { display: none !important; }
       .print-letterhead {
@@ -1241,8 +1309,26 @@
   </header>
 
   <main class="container">
+    <!-- TAB 0: Overview Dashboard -->
+    <section id="tab-home" class="tab-section">
+      <div class="card">
+        <h2>Anniversary Control Centre</h2>
+        <p class="hint">A live snapshot from this device. Use Refresh / Sync Cloud for the latest server records.</p>
+        <div id="dashboard-stats" class="summary-grid dashboard-grid"></div>
+        <div class="toolbar dashboard-actions">
+          <button class="gold" type="button" onclick="openTab('log')">+ Log Record</button>
+          <button class="secondary" type="button" onclick="openTab('roll')">Take Roll Call</button>
+          <button class="secondary" type="button" onclick="void syncAllCloud(true)">Refresh / Sync Cloud</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Recent Activity</h2>
+        <div id="dashboard-recent"></div>
+      </div>
+    </section>
+
     <!-- TAB 1: Team & Rules -->
-    <section id="tab-team" class="tab-section">
+    <section id="tab-team" class="tab-section hidden">
       <div class="card">
         <h2>
           <span>Quick-Dial Committee Directory</span>
@@ -1511,6 +1597,12 @@
           <input type="search" id="logs-search" placeholder="Search records by person, department, or keyword..." oninput="filterLogsSearch(this.value)" />
         </div>
 
+        <div class="date-range">
+          <label for="logs-date-from">From<input type="date" id="logs-date-from" onchange="onDateRangeChange()" /></label>
+          <label for="logs-date-to">To<input type="date" id="logs-date-to" onchange="onDateRangeChange()" /></label>
+          <button class="button-small secondary" type="button" onclick="clearDateRange()">Clear dates</button>
+        </div>
+
         <!-- Filter Pills -->
         <div class="filter-pills status-pills" id="log-filters">
           <button class="filter-pill selected" data-filter="All">All</button>
@@ -1525,6 +1617,10 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export JSON Backup
           </button>
+          <button class="secondary" onclick="exportRecordsCsv()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+            Export CSV (filtered)
+          </button>
           <label class="button secondary" for="backup-file">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import JSON Backup
@@ -1538,12 +1634,22 @@
 
         <div id="records-list"></div>
       </div>
+
+      <div class="card audit-card">
+        <h2>Record Activity / Audit Trail</h2>
+        <p class="hint">Server-recorded changes for the record types your role can view (latest 100).</p>
+        <div id="audit-list"></div>
+      </div>
     </section>
   </main>
 
   <!-- Modern Floating Dock Navigation -->
   <nav class="nav" aria-label="Primary navigation">
-    <button class="active" data-tab="team" onclick="switchTab('team', this)">
+    <button class="active" data-tab="home" onclick="switchTab('home', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/></svg>
+      <span>Overview</span>
+    </button>
+    <button data-tab="team" onclick="switchTab('team', this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Team &amp; Rules</span>
     </button>
@@ -1585,6 +1691,8 @@
 
     let activeFilter = 'All';
     let logsSearchTerm = '';
+    let logsDateFrom = '';
+    let logsDateTo = '';
     let directorySearchTerm = '';
     let attendanceStatuses = {};
     let editingPhones = false;
@@ -1638,6 +1746,7 @@
       document.getElementById('session-avatar').textContent = currentAdmin ? getInitials(currentAdmin.name) : '';
       document.getElementById('logout-button').classList.remove('hidden');
       applyRoleAccess();
+      renderDashboard();
       updateCloudStatusFromLocal();
       if (navigator.onLine) {
         void syncCloudRecords();
@@ -1756,11 +1865,11 @@
     function applyRoleAccess() {
       if (!currentAdmin) return;
       const tabsByRole = {
-        superadmin: ['team', 'roll', 'log', 'messages', 'logs'],
-        secretary: ['team', 'roll', 'log', 'messages', 'logs'],
-        disciplinary: ['team', 'log', 'messages', 'logs'],
-        attendance: ['team', 'roll', 'logs'],
-        viewer: ['team', 'logs']
+        superadmin: ['home', 'team', 'roll', 'log', 'messages', 'logs'],
+        secretary: ['home', 'team', 'roll', 'log', 'messages', 'logs'],
+        disciplinary: ['home', 'team', 'log', 'messages', 'logs'],
+        attendance: ['home', 'team', 'roll', 'logs'],
+        viewer: ['home', 'team', 'logs']
       };
       const allowed = tabsByRole[currentAdmin.role] || ['team'];
       document.querySelectorAll('.nav [data-tab]').forEach(button => {
@@ -2160,6 +2269,59 @@
       return result;
     }
 
+    async function requestAudit() {
+      const token = getAdminToken();
+      if (!token) {
+        const error = new Error('Please sign in again.');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      const response = await fetch('/api/audit?limit=100', {
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = new Error(result?.error || `Audit request failed (${response.status}).`);
+        if (response.status === 401) {
+          error.code = 'AUTH_FAILED';
+          expireAdminSession();
+        }
+        throw error;
+      }
+      if (!Array.isArray(result)) throw new Error('Cloud returned an invalid audit response.');
+      return result;
+    }
+
+    async function loadAuditTrail(showResult = false) {
+      const container = document.getElementById('audit-list');
+      if (!container) return;
+      if (!currentAdmin || !getAdminToken()) {
+        container.innerHTML = '<p class="hint">Sign in to view the record activity log.</p>';
+        return;
+      }
+      try {
+        const rows = (await requestAudit()).filter(row => canReadRecordType(row.recordType));
+        if (!rows.length) {
+          container.innerHTML = '<p class="hint">No record activity has been logged yet.</p>';
+          return;
+        }
+        container.innerHTML = rows.map(row => `
+          <div class="audit-item">
+            <span class="audit-action ${escapeHtml(row.action)}">${escapeHtml(row.action)}</span>
+            <strong>${escapeHtml(row.actorName)}</strong>
+            <span class="hint">${escapeHtml(roleLabel(row.actorRole))} · ${escapeHtml(new Date(row.createdAt).toLocaleString())}</span>
+            <div>${escapeHtml(row.detail || row.recordType)}</div>
+          </div>`).join('');
+      } catch (error) {
+        console.warn('Audit trail unavailable:', error);
+        container.innerHTML = `<p class="hint">${error.code === 'AUTH_FAILED'
+          ? 'Your session expired. Please sign in again.'
+          : 'The audit trail is unavailable right now.'}</p>`;
+        if (showResult) showToast('Audit trail unavailable.', 'warning');
+      }
+    }
+
     function markRecordCloudSynced(id) {
       if (getPendingCloudDeletes().includes(String(id))) return false;
       const records = getRecords();
@@ -2296,6 +2458,11 @@
         .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    function openTab(name) {
+      const button = document.querySelector(`.nav [data-tab="${name}"]`);
+      if (button && !button.classList.contains('hidden')) switchTab(name, button);
+    }
+
     function switchTab(name, button) {
       document.querySelectorAll('.tab-section').forEach(section => section.classList.add('hidden'));
       const target = document.getElementById(`tab-${name}`);
@@ -2310,7 +2477,9 @@
       if (name === 'logs') {
         renderRecords();
         void syncCloudRecords();
+        void loadAuditTrail();
       }
+      if (name === 'home') renderDashboard();
       if (name === 'team' && !editingPhones && navigator.onLine) void syncCommitteePhones();
       if (name === 'roll') renderRollCall();
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2436,6 +2605,7 @@
       if (showResult && !phonesOk) {
         showToast('Some directory changes remain queued on this device.', 'warning');
       }
+      void loadAuditTrail();
       return recordsOk && phonesOk;
     }
 
@@ -2764,6 +2934,28 @@
       renderRecords();
     }
 
+    function onDateRangeChange() {
+      logsDateFrom = document.getElementById('logs-date-from')?.value || '';
+      logsDateTo = document.getElementById('logs-date-to')?.value || '';
+      renderRecords();
+    }
+
+    function clearDateRange() {
+      logsDateFrom = '';
+      logsDateTo = '';
+      const from = document.getElementById('logs-date-from');
+      const to = document.getElementById('logs-date-to');
+      if (from) from.value = '';
+      if (to) to.value = '';
+      renderRecords();
+    }
+
+    function filteredRecords() {
+      return getRecords()
+        .filter(record => canReadRecordType(record.type))
+        .filter(record => recordMatches(record, activeFilter, logsSearchTerm));
+    }
+
     function recordMatches(record, filter, search) {
       // Filter tab check
       let matchesFilter = true;
@@ -2773,10 +2965,14 @@
       else if (filter === 'Resolved Cases') matchesFilter = record.type === 'Incident Report' && record.status === 'Resolved';
 
       if (!matchesFilter) return false;
+
+      const date = String(record.date || '');
+      if (logsDateFrom && date < logsDateFrom) return false;
+      if (logsDateTo && date > logsDateTo) return false;
       if (!search) return true;
 
       // Search term check
-      const text = `${record.type} ${record.title} ${record.details} ${record.status || ''} ${record.outcome || ''}`.toLowerCase();
+      const text = `${record.type} ${record.title} ${record.details} ${record.status || ''} ${record.outcome || ''} ${record.recorder || ''} ${date}`.toLowerCase();
       return text.includes(search);
     }
 
@@ -2786,11 +2982,61 @@
       return 'status-pending';
     }
 
+    function renderDashboard() {
+      const stats = document.getElementById('dashboard-stats');
+      const recentBox = document.getElementById('dashboard-recent');
+      if (!stats || !recentBox) return;
+
+      const records = getRecords().filter(record => canReadRecordType(record.type));
+      const incidents = records.filter(record => record.type === 'Incident Report');
+      const pending = incidents.filter(record => record.status !== 'Resolved').length;
+      const attendance = records
+        .filter(record => record.type === 'Attendance')
+        .sort((left, right) => String(right.date || '').localeCompare(String(left.date || '')))[0];
+      const counts = attendance ? attendanceCounts(attendance.statuses || {}) : {};
+      const total = STATUSES.reduce((sum, status) => sum + (Number(counts[status]) || 0), 0);
+      const attended = (Number(counts.Present) || 0) + (Number(counts.Late) || 0);
+      const rate = total ? `${Math.round(attended / total * 100)}%` : '—';
+
+      const cards = [
+        { label: 'Pending Cases', value: pending, note: 'Incident reports open', tone: 'pending' },
+        { label: 'Resolved Cases', value: incidents.length - pending, note: 'With committee ruling', tone: 'present' },
+        { label: 'Meeting Minutes', value: records.filter(record => record.type === 'Meeting Minutes').length, note: 'Saved sittings', tone: 'excused' },
+        { label: 'Attendance Rate', value: rate, note: attendance ? `On ${attendance.date}` : 'No roll call yet', tone: 'late' }
+      ];
+      stats.innerHTML = cards.map(card => `
+        <div class="summary-count ${card.tone}">
+          <strong>${escapeHtml(card.value)}</strong>
+          ${escapeHtml(card.label)}
+          <small>${escapeHtml(card.note)}</small>
+        </div>`).join('');
+
+      const recent = [...records].sort((left, right) => {
+        const byCreated = Date.parse(right.createdAt || '') - Date.parse(left.createdAt || '');
+        return Number.isNaN(byCreated) ? String(right.date || '').localeCompare(String(left.date || '')) : byCreated;
+      }).slice(0, 5);
+      if (!recent.length) {
+        recentBox.innerHTML = '<p class="hint">No records saved yet. Log an incident or take roll call to get started.</p>';
+        return;
+      }
+      recentBox.innerHTML = recent.map(record => {
+        const tone = record.type === 'Incident Report'
+          ? (record.status === 'Resolved' ? 'resolved' : '')
+          : record.type === 'Attendance' ? 'attendance' : 'minutes';
+        return `
+          <div class="activity-item">
+            <span class="activity-dot ${tone}"></span>
+            <div class="activity-copy">
+              <strong>${escapeHtml(record.title || record.type)}</strong>
+              <span>${escapeHtml(record.type)} · ${escapeHtml(record.date)} · ${escapeHtml(record.status || 'Saved')}</span>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
     function renderRecords() {
       const list = document.getElementById('records-list');
-      const records = getRecords()
-        .filter(record => canReadRecordType(record.type))
-        .filter(record => recordMatches(record, activeFilter, logsSearchTerm));
+      const records = filteredRecords();
       
       if (!records.length) {
         list.innerHTML = `
@@ -2840,6 +3086,7 @@
         if (button.dataset.action === 'share') shareRecord(record);
         if (button.dataset.action === 'delete') deleteRecord(record.id);
       }));
+      renderDashboard();
     }
 
     function resolveCase(id) {
@@ -2902,6 +3149,42 @@
       });
       showToast('Record deleted.', 'info');
       renderRecords();
+    }
+
+    function csvCell(value) {
+      const text = String(value ?? '');
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function exportRecordsCsv() {
+      const records = filteredRecords();
+      if (!records.length) {
+        showToast('No records match the current filters.', 'warning');
+        return;
+      }
+      const header = ['ID', 'Type', 'Date', 'Title', 'Status', 'Recorder', 'Details', 'Outcome', 'Created At'];
+      const rows = records.map(record => [
+        record.id,
+        record.type,
+        record.date,
+        record.title,
+        record.status,
+        record.recorder,
+        record.details,
+        record.outcome,
+        record.createdAt || record.created_at
+      ]);
+      const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gemyfell-records-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast(`${records.length} record(s) exported to CSV.`, 'success');
     }
 
     function exportRecords() {
@@ -3018,6 +3301,7 @@
 
     document.getElementById('roll-date').value = localDateValue();
     renderDirectory();
+    renderDashboard();
     renderRollCall();
     updateMessagePreview();
     updateCloudStatus(!navigator.onLine ? 'offline' : 'authRequired');
