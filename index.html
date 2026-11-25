@@ -1164,6 +1164,141 @@
       40%, 60% { transform: translate3d(6px, 0, 0); }
     }
 
+    /* Floating Note / How-To Guide */
+    .guide-button {
+      position: fixed;
+      right: 14px;
+      bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+      z-index: 200;
+      width: 48px;
+      height: 48px;
+      min-height: 0;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.75);
+      background: linear-gradient(145deg, #d97706, #a94808);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(120, 53, 15, 0.45);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .guide-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 28px rgba(120, 53, 15, 0.55);
+    }
+    .guide-button svg { width: 22px; height: 22px; }
+    .guide-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(24, 6, 6, 0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .guide-panel {
+      width: min(100%, 520px);
+      max-height: min(86vh, 760px);
+      overflow-y: auto;
+      padding: 18px;
+      border: 1px solid rgba(217, 119, 6, 0.35);
+      border-radius: 20px;
+      background: #fffdf9;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+    }
+    .guide-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .guide-head h2 {
+      margin: 0;
+      font-size: 1.15rem;
+      color: var(--primary);
+    }
+    .guide-close {
+      width: 34px;
+      height: 34px;
+      min-height: 0;
+      padding: 0;
+      border-radius: 50%;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 1rem;
+    }
+    .guide-lead {
+      margin: 8px 0 14px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+    .guide-flowline {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .guide-chip {
+      padding: 5px 10px;
+      border-radius: 99px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.72rem;
+      font-weight: 750;
+    }
+    .guide-arrow { color: var(--accent); font-weight: 800; }
+    .guide-flow { display: grid; gap: 8px; }
+    .guide-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .guide-num {
+      width: 26px;
+      height: 26px;
+      flex: 0 0 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+    .guide-step strong { display: block; font-size: 0.9rem; }
+    .guide-step span { font-size: 0.8rem; color: var(--muted); }
+    .guide-section-title {
+      margin: 18px 0 8px;
+      font-size: 0.95rem;
+      color: var(--primary);
+    }
+    .guide-example {
+      margin: 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-size: 0.76rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+    .guide-note {
+      margin: 12px 0 0;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
     #backup-file { display: none; }
     .hidden { display: none !important; }
     .print-letterhead { display: none; }
@@ -1218,7 +1353,8 @@
       #tab-logs h2, #tab-logs .toolbar, #tab-logs .filter-pills, #tab-logs .search-box,
       #tab-logs .date-range, #tab-logs .audit-card,
       #tab-logs .cloud-sync-panel,
-      #tab-logs .record-actions, #tab-logs .record-item button, .nav, header { display: none !important; }
+      #tab-logs .record-actions, #tab-logs .record-item button, .nav, header,
+      .guide-button, .guide-overlay { display: none !important; }
       .print-letterhead {
         display: block !important;
         margin-bottom: 20px;
@@ -1671,6 +1807,75 @@
     </button>
   </nav>
 
+  <!-- Floating Note Button: quick how-to guide -->
+  <button id="guide-button" class="guide-button" type="button" onclick="openGuide()" aria-label="Open how-to guide" title="How to use this app">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h9"/><path d="M14 2v6h6"/><path d="M8 13h6"/><path d="M8 17h4"/><path d="M16.5 20.5 20 17l2 2-3.5 3.5H16v-2z"/></svg>
+  </button>
+
+  <div id="guide-overlay" class="guide-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="guide-title" onclick="guideBackdrop(event)">
+    <div class="guide-panel">
+      <div class="guide-head">
+        <h2 id="guide-title">How to use GEMYFELL @20</h2>
+        <button id="guide-close" class="guide-close" type="button" onclick="closeGuide()" aria-label="Close guide">✕</button>
+      </div>
+      <p class="guide-lead">Short steps. Simple words. The app works offline, then shares your work when the internet returns.</p>
+
+      <div class="guide-flowline" aria-label="App flow">
+        <span class="guide-chip">Sign in</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Overview</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Team</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Roll Call</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">+ Log</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Messages</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Logs</span><span class="guide-arrow">→</span>
+        <span class="guide-chip">Sync</span>
+      </div>
+
+      <div class="guide-flow">
+        <div class="guide-step"><span class="guide-num">1</span><div><strong>Sign in</strong><span>Use your phone number and PIN. First sign-in may ask you to pick a new PIN.</span></div></div>
+        <div class="guide-step"><span class="guide-num">2</span><div><strong>Overview</strong><span>See open cases, resolved cases, minutes, attendance rate, and recent work.</span></div></div>
+        <div class="guide-step"><span class="guide-num">3</span><div><strong>Team &amp; Rules</strong><span>Call committee members. Secretaries can edit numbers. Read the code of conduct.</span></div></div>
+        <div class="guide-step"><span class="guide-num">4</span><div><strong>Roll Call</strong><span>Mark each person Present, Late, Excused, or Absent. Save, then share on WhatsApp.</span></div></div>
+        <div class="guide-step"><span class="guide-num">5</span><div><strong>+ Log</strong><span>Write an Incident Report, Meeting Minutes, or Attendance record.</span></div></div>
+        <div class="guide-step"><span class="guide-num">6</span><div><strong>Messages</strong><span>Make an official message or summons. Copy it or send it on WhatsApp.</span></div></div>
+        <div class="guide-step"><span class="guide-num">7</span><div><strong>Logs &amp; PDF</strong><span>Search, filter by date, export CSV, print PDF, and read the audit trail.</span></div></div>
+        <div class="guide-step"><span class="guide-num">8</span><div><strong>Sync</strong><span>Work offline anytime. Tap Refresh / Sync Cloud when online to share changes.</span></div></div>
+      </div>
+
+      <h3 class="guide-section-title">Simple minutes example</h3>
+      <pre class="guide-example">GEMYFELL @20 — MINUTES
+Date: Sat 21 Nov 2026 | Time: 4:00-5:15 PM
+Place: Church Conference Room
+By: Brother Fred (Secretary)
+
+1. Attendance
+Present: Emma, Obrepong, Fred, Boahemaa, Ellen, Mark, Patrick, Gideon
+Absent with apology: Esther, Janet
+
+2. Opening
+Prayer: Elder Mark
+Chairman welcomed all.
+
+3. Last minutes
+Read by Fred. No changes. Adopted.
+
+4. Decisions
+- Rehearsal: come 30 minutes early. Tell your lead 2 hours before if late.
+  Who: Mark and Patrick - before Wednesday rehearsal.
+- Sound gear: sign out and return after each session.
+  Who: Gideon - keep the log.
+- Case 01: teams send figures by Tuesday 6 PM.
+  Who: Boahemaa - send reminder tonight.
+
+5. Close
+Next meeting: Wed 25 Nov, 5:30 PM.
+Prayer: Ellen.
+
+Signed: Fred | Approved: Emma</pre>
+      <p class="guide-note">Tip: write facts, decisions, and who will do what. Keep names and dates clear. Avoid blame.</p>
+    </div>
+  </div>
+
   <script>
     const RECORDS_KEY = 'gemyfell_disc_records';
     const DELETED_RECORDS_KEY = 'gemyfell_deleted_records';
@@ -1717,6 +1922,34 @@
         setTimeout(() => toast.remove(), 250);
       }, duration);
     }
+
+    // Floating how-to guide (note icon)
+    let guideLastFocus = null;
+
+    function openGuide() {
+      const overlay = document.getElementById('guide-overlay');
+      const button = document.getElementById('guide-button');
+      if (!overlay || !button) return;
+      guideLastFocus = document.activeElement;
+      overlay.classList.remove('hidden');
+      document.getElementById('guide-close')?.focus();
+    }
+
+    function closeGuide() {
+      const overlay = document.getElementById('guide-overlay');
+      if (!overlay || overlay.classList.contains('hidden')) return;
+      overlay.classList.add('hidden');
+      if (guideLastFocus && document.contains(guideLastFocus)) guideLastFocus.focus();
+      guideLastFocus = null;
+    }
+
+    function guideBackdrop(event) {
+      if (event.target === event.currentTarget) closeGuide();
+    }
+
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closeGuide();
+    });
 
     function readAuthSession() {
       try {
