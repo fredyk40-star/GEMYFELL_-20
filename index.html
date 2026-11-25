@@ -490,8 +490,8 @@
     }
     .person-card {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      justify-content: space-between;
       gap: 10px;
       padding: 10px 14px;
       background: #ffffff;
@@ -499,6 +499,13 @@
       border-radius: var(--radius-md);
       transition: var(--transition);
       box-shadow: var(--shadow-sm);
+    }
+    .person-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-width: 0;
     }
     @media (hover: hover) {
       .person-card:hover {
@@ -561,15 +568,26 @@
       box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
     }
     .phone-editor {
-      width: 100%;
-      margin-top: 8px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      flex: 1 1 100%;
+      display: flex;
       gap: 8px;
+      width: 100%;
     }
     .phone-editor input {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: 100%;
       padding: 8px 10px;
-      font-size: 0.88rem;
+      font-size: 16px;
+    }
+    .phone-editor .button-small {
+      flex: 0 0 auto;
+    }
+    @media (max-width: 639px) {
+      .person-card.editing .call-link { display: none; }
+      .person-card.editing .person-main { flex: 1 1 100%; }
+      .person-name { white-space: normal; }
+      .person-role { display: block; }
     }
 
     /* Roll Call Members */
@@ -1239,7 +1257,7 @@
           <input type="search" id="directory-search" placeholder="Search committee member by name or role..." oninput="filterDirectory(this.value)" />
         </div>
 
-        <p class="hint">Phone numbers are safely saved on this device. Replace sample numbers anytime.</p>
+        <p class="hint">Phone numbers sync to the cloud for administrators and stay available offline on this device.</p>
         <div id="team-directory"></div>
       </div>
 
@@ -1484,7 +1502,7 @@
         <h2>Saved Records, Case Status &amp; PDF Report</h2>
         <div class="cloud-sync-panel">
           <span id="cloud-status" class="cloud-status" role="status" aria-live="polite">☁️ Cloud Sync Pending</span>
-          <button class="button-small secondary" type="button" onclick="syncCloudRecords(true)">Refresh / Sync Cloud</button>
+          <button class="button-small secondary" type="button" onclick="void syncAllCloud(true)">Refresh / Sync Cloud</button>
         </div>
 
         <!-- Live Search inside Logs -->
@@ -1553,6 +1571,7 @@
     const AUTH_SESSION_KEY = 'gemyfell_admin_session';
     const PIN_SETUP_TOKEN_KEY = 'gemyfell_pin_setup_token';
     const PHONE_KEY = 'gemyfell_team_phones';
+    const PENDING_PHONE_WRITES_KEY = 'gemyfell_pending_phone_writes';
     const EXTRA_MEMBERS_KEY = 'gemyfell_extra_members';
     const STATUSES = ['Present', 'Late', 'Excused', 'Absent'];
     const ALLOWED_RECORD_TYPES = new Set(['Incident Report', 'Meeting Minutes', 'Attendance']);
@@ -1571,6 +1590,7 @@
     let editingPhones = false;
     let cloudOperationQueue = Promise.resolve();
     let cloudSyncPromise = null;
+    let phoneSyncPromise = null;
     let currentAdmin = null;
 
     // Toast Notification System
@@ -1619,7 +1639,10 @@
       document.getElementById('logout-button').classList.remove('hidden');
       applyRoleAccess();
       updateCloudStatusFromLocal();
-      if (navigator.onLine) void syncCloudRecords();
+      if (navigator.onLine) {
+        void syncCloudRecords();
+        void syncCommitteePhones();
+      }
     }
 
     async function parseApiResponse(response) {
@@ -1749,6 +1772,13 @@
       });
       document.getElementById('admin-management').classList.toggle('hidden', currentAdmin.role !== 'superadmin');
       if (currentAdmin.role === 'superadmin') void loadAdminAccounts();
+
+      const phoneToggle = document.getElementById('phone-toggle');
+      if (phoneToggle) phoneToggle.classList.toggle('hidden', !canWriteDirectory());
+      if (!canWriteDirectory() && editingPhones) {
+        editingPhones = false;
+        document.getElementById('phone-toggle-text').textContent = 'Edit Numbers';
+      }
 
       const active = document.querySelector('.nav [data-tab].active');
       if (!active || !allowed.includes(active.dataset.tab)) {
@@ -2018,7 +2048,7 @@
         canWriteRecordType(record.type) &&
         !deleteIds.includes(String(record.id))
       );
-      return hasDeletes || hasUploads;
+      return hasDeletes || hasUploads || Object.keys(getPendingPhoneWrites()).length > 0;
     }
 
     function updateCloudStatusFromLocal() {
@@ -2281,8 +2311,132 @@
         renderRecords();
         void syncCloudRecords();
       }
+      if (name === 'team' && !editingPhones && navigator.onLine) void syncCommitteePhones();
       if (name === 'roll') renderRollCall();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function canWriteDirectory() {
+      return !!currentAdmin && ['superadmin', 'secretary'].includes(currentAdmin.role);
+    }
+
+    function getPendingPhoneWrites() {
+      const writes = safeRead(PENDING_PHONE_WRITES_KEY, {});
+      if (!writes || typeof writes !== 'object' || Array.isArray(writes)) return {};
+      const clean = {};
+      Object.entries(writes).forEach(([name, entry]) => {
+        if (BASE_MEMBERS.includes(name) && entry && typeof entry.phone === 'string') clean[name] = entry;
+      });
+      return clean;
+    }
+
+    async function phoneRequest(method, body = null) {
+      const token = getAdminToken();
+      if (!token) {
+        const error = new Error('Please sign in again.');
+        error.code = 'AUTH_REQUIRED';
+        throw error;
+      }
+      const options = {
+        method,
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}` }
+      };
+      if (body) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+      }
+      const response = await fetch('/api/phones', options);
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const error = new Error(result?.error || `Directory sync failed (${response.status}).`);
+        if (response.status === 401) {
+          error.code = 'AUTH_FAILED';
+          expireAdminSession();
+        }
+        throw error;
+      }
+      return result;
+    }
+
+    function syncCommitteePhones(showResult = false) {
+      if (phoneSyncPromise) return phoneSyncPromise;
+      phoneSyncPromise = enqueueCloudOperation(async () => {
+        if (!currentAdmin || !getAdminToken()) return false;
+        if (!navigator.onLine) {
+          updateCloudStatus('offline');
+          return false;
+        }
+        updateCloudStatus('syncing');
+        let hasFailures = false;
+        try {
+          const writes = getPendingPhoneWrites();
+          for (const [name, entry] of Object.entries(writes)) {
+            try {
+              await phoneRequest('POST', { name, phone: entry.phone });
+              const remaining = getPendingPhoneWrites();
+              if (remaining[name]?.updatedAt === entry.updatedAt) {
+                delete remaining[name];
+                if (!saveLocal(PENDING_PHONE_WRITES_KEY, remaining)) {
+                  hasFailures = true;
+                  break;
+                }
+              }
+            } catch (error) {
+              hasFailures = true;
+              console.warn('Phone number remains queued:', error);
+            }
+          }
+          if (hasFailures) {
+            updateCloudStatus('offline');
+            if (showResult) showToast('Some directory changes remain queued on this device.', 'warning');
+            return false;
+          }
+
+          const cloudPhones = await phoneRequest('GET');
+          if (!cloudPhones || typeof cloudPhones !== 'object' || Array.isArray(cloudPhones)) {
+            throw new Error('Cloud returned an invalid directory response.');
+          }
+          const merged = {};
+          Object.entries(cloudPhones).forEach(([name, phone]) => {
+            if (BASE_MEMBERS.includes(name) && typeof phone === 'string' && /^\+?\d{7,15}$/.test(phone)) merged[name] = phone;
+          });
+          Object.entries(getPendingPhoneWrites()).forEach(([name, entry]) => {
+            if (entry.phone) merged[name] = entry.phone;
+            else delete merged[name];
+          });
+          if (!saveLocal(PHONE_KEY, merged)) {
+            throw new Error('Could not update the local directory cache.');
+          }
+          if (!editingPhones) renderDirectory();
+          updateCloudStatusFromLocal();
+          if (showResult) showToast('Committee directory refreshed from the cloud.', 'success');
+          return true;
+        } catch (error) {
+          console.warn('Directory sync failed; local numbers are unchanged:', error);
+          updateCloudStatus(cloudErrorStatus(error));
+          if (showResult) {
+            showToast(error.code === 'AUTH_FAILED'
+              ? 'Your session expired. Please sign in again.'
+              : 'Directory sync unavailable. Local numbers remain available.', 'warning');
+          }
+          return false;
+        }
+      }).finally(() => {
+        phoneSyncPromise = null;
+      });
+      return phoneSyncPromise;
+    }
+
+    async function syncAllCloud(showResult = false) {
+      const [recordsOk, phonesOk] = await Promise.all([
+        syncCloudRecords(showResult),
+        syncCommitteePhones(false)
+      ]);
+      if (showResult && !phonesOk) {
+        showToast('Some directory changes remain queued on this device.', 'warning');
+      }
+      return recordsOk && phonesOk;
     }
 
     function phoneMap() {
@@ -2337,11 +2491,13 @@
               const number = normalizePhone(rawPhone) || '+233000000000';
               const initials = getInitials(person.name);
               return `
-              <div class="person-card">
-                <div class="person-avatar">${escapeHtml(initials)}</div>
-                <div class="person-info">
-                  <span class="person-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</span>
-                  ${person.role ? `<span class="person-role">${escapeHtml(person.role)}</span>` : '<span class="person-role">Committee Member</span>'}
+              <div class="person-card${editingPhones ? ' editing' : ''}">
+                <div class="person-main">
+                  <div class="person-avatar">${escapeHtml(initials)}</div>
+                  <div class="person-info">
+                    <span class="person-name" title="${escapeHtml(person.name)}">${escapeHtml(person.name)}</span>
+                    ${person.role ? `<span class="person-role">${escapeHtml(person.role)}</span>` : '<span class="person-role">Committee Member</span>'}
+                  </div>
                 </div>
                 <a class="call-link" href="tel:${escapeHtml(number)}" aria-label="Call ${escapeHtml(person.name)}">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
@@ -2359,12 +2515,21 @@
     }
 
     function togglePhoneEditor() {
+      if (!canWriteDirectory()) {
+        showToast('Only secretaries and superadmins can edit directory numbers.', 'warning');
+        return;
+      }
       editingPhones = !editingPhones;
       document.getElementById('phone-toggle-text').textContent = editingPhones ? 'Done Editing' : 'Edit Numbers';
       renderDirectory();
+      if (editingPhones && navigator.onLine) void syncCommitteePhones();
     }
 
     function savePhone(name, button) {
+      if (!canWriteDirectory()) {
+        showToast('Only secretaries and superadmins can edit directory numbers.', 'warning');
+        return;
+      }
       const input = button.parentElement.querySelector('input');
       const phone = normalizePhone(input.value);
       if (phone && !/^\+?\d{7,15}$/.test(phone)) {
@@ -2374,10 +2539,14 @@
       const phones = phoneMap();
       if (phone) phones[name] = phone;
       else delete phones[name];
-      if (saveLocal(PHONE_KEY, phones)) {
-        showToast(`Phone number for ${name} saved`, 'success');
-        renderDirectory();
-      }
+      if (!saveLocal(PHONE_KEY, phones)) return;
+      const writes = getPendingPhoneWrites();
+      writes[name] = { phone, updatedAt: new Date().toISOString() };
+      if (!saveLocal(PENDING_PHONE_WRITES_KEY, writes)) return;
+      showToast(`Phone number for ${name} saved${navigator.onLine ? '; syncing to cloud' : ' offline'}`, 'success');
+      renderDirectory();
+      updateCloudStatusFromLocal();
+      if (navigator.onLine) void syncCommitteePhones();
     }
 
     function allRollMembers() {
@@ -2853,8 +3022,10 @@
     updateMessagePreview();
     updateCloudStatus(!navigator.onLine ? 'offline' : 'authRequired');
     window.addEventListener('online', () => {
-      if (readAuthSession()) void syncCloudRecords();
-      else updateCloudStatus('authRequired');
+      if (readAuthSession()) {
+        void syncCloudRecords();
+        void syncCommitteePhones();
+      } else updateCloudStatus('authRequired');
     });
     window.addEventListener('offline', () => updateCloudStatus('offline'));
 
