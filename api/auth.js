@@ -1,6 +1,7 @@
 import {
   checkLoginRateLimit,
   clearLoginFailures,
+  clientIp,
   createSession,
   ensureAuthSchema,
   ensureSuperadmin,
@@ -42,7 +43,8 @@ async function login(req, res, db) {
   }
 
   await ensureSuperadmin(db);
-  await checkLoginRateLimit(db, phone);
+  const ip = clientIp(req);
+  await checkLoginRateLimit(db, phone, ip);
 
   const result = await db.execute({
     sql: `SELECT phone, name, role, pin_hash, temp_password_hash, must_set_pin, active
@@ -63,7 +65,7 @@ async function login(req, res, db) {
   }
 
   if (!valid || !admin) {
-    await recordLoginFailure(db, phone);
+    await recordLoginFailure(db, phone, ip);
     return sendError(res, 401, 'Phone number or PIN / temporary password is incorrect.');
   }
 

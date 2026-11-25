@@ -932,6 +932,13 @@
       background: #ffffff;
       color: #5c1616;
     }
+    #login-phone {
+      width: 100%;
+      max-width: 100%;
+      font-size: 1rem;
+      letter-spacing: normal;
+      font-weight: 500;
+    }
     .lock-box button {
       width: 100%;
       background: var(--accent);
@@ -1403,6 +1410,7 @@
     const PHONE_KEY = 'gemyfell_team_phones';
     const EXTRA_MEMBERS_KEY = 'gemyfell_extra_members';
     const STATUSES = ['Present', 'Late', 'Excused', 'Absent'];
+    const ALLOWED_RECORD_TYPES = new Set(['Incident Report', 'Meeting Minutes', 'Attendance']);
     const TEAM_GROUPS = [
       { name: 'Board', people: [{ name: 'Brother Emma', role: 'Chairman' }, { name: 'Brother Obrepong Danso', role: 'Vice Chairman' }] },
       { name: 'Secretariat', people: [{ name: 'Brother Fred', role: 'Secretary' }, { name: 'Miss Boahemaa', role: 'Vice Secretary' }] },
@@ -1849,6 +1857,21 @@
       indicator.className = `cloud-status ${className}`;
     }
 
+    function hasPendingCloudWork() {
+      const deleteIds = getPendingCloudDeletes();
+      const records = getRecords();
+      const hasDeletes = deleteIds.some(id => {
+        const record = records.find(item => String(item.id) === String(id));
+        return !record || canWriteRecordType(record.type);
+      });
+      const hasUploads = records.some(record =>
+        record._cloudSynced !== true &&
+        canWriteRecordType(record.type) &&
+        !deleteIds.includes(String(record.id))
+      );
+      return hasDeletes || hasUploads;
+    }
+
     function updateCloudStatusFromLocal() {
       if (!navigator.onLine) {
         updateCloudStatus('offline');
@@ -1858,8 +1881,7 @@
         updateCloudStatus('authRequired');
         return;
       }
-      const hasPendingRecords = getRecords().some(record => record._cloudSynced !== true);
-      updateCloudStatus(hasPendingRecords || getPendingCloudDeletes().length ? 'pending' : 'synced');
+      updateCloudStatus(hasPendingCloudWork() ? 'pending' : 'synced');
     }
 
     function cloudErrorStatus(error) {
@@ -2077,8 +2099,8 @@
           console.warn('Cloud refresh failed; local records are unchanged:', error);
           updateCloudStatus(cloudErrorStatus(error));
           if (showResult) {
-            showToast(error.code === 'CLOUD_AUTH_FAILED'
-              ? 'The cloud sync key was rejected. Check it and try again.'
+            showToast(error.code === 'AUTH_FAILED'
+              ? 'Your session expired. Please sign in again.'
               : 'Cloud unavailable. Your local records remain available.', 'warning');
           }
           return false;
@@ -2462,6 +2484,7 @@
       }
 
       list.innerHTML = records.map(record => {
+        const canWrite = canWriteRecordType(record.type);
         let borderAccent = 'var(--accent)';
         if (record.type === 'Meeting Minutes') borderAccent = '#64748b';
         else if (record.type === 'Attendance') borderAccent = '#0284c7';
@@ -2485,9 +2508,9 @@
             </div>` : ''}
           <pre>${escapeHtml(record.details || '')}${record.outcome ? `\n\nCommittee Outcome:\n${escapeHtml(record.outcome)}` : ''}</pre>
           <div class="toolbar">
-            ${record.type === 'Incident Report' ? `<button class="gold" data-action="resolve" data-id="${escapeHtml(record.id)}">${record.status === 'Resolved' ? 'Update Outcome' : 'Mark Resolved / Add Ruling'}</button>` : ''}
+            ${canWrite && record.type === 'Incident Report' ? `<button class="gold" data-action="resolve" data-id="${escapeHtml(record.id)}">${record.status === 'Resolved' ? 'Update Outcome' : 'Mark Resolved / Add Ruling'}</button>` : ''}
             <button class="whatsapp" data-action="share" data-id="${escapeHtml(record.id)}">Share via WhatsApp</button>
-            <button class="danger button-small" data-action="delete" data-id="${escapeHtml(record.id)}">Delete</button>
+            ${canWrite ? `<button class="danger button-small" data-action="delete" data-id="${escapeHtml(record.id)}">Delete</button>` : ''}
           </div>
         </article>`;
       }).join('');
@@ -2584,18 +2607,52 @@
     function importRecords(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('Backup file is too large (maximum 5 MB).', 'error');
+        event.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         try {
           const incoming = JSON.parse(reader.result);
-          if (!Array.isArray(incoming) || !incoming.every(record =>
-            record && record.id && record.type && record.date && record.title && typeof record.details === 'string'
-          )) {
+          if (!Array.isArray(incoming)) {
             throw new Error('Backup must be an array of valid saved records.');
           }
+          const seen = new Set();
+          const sanitized = incoming.map(record => {
+            if (!record || !record.id || !ALLOWED_RECORD_TYPES.has(record.type) ||
+                !record.date || !record.title || typeof record.details !== 'string') {
+              throw new Error('Backup must be an array of valid saved records.');
+            }
+            const id = String(record.id);
+            if (seen.has(id)) throw new Error('Backup contains duplicate record IDs.');
+            seen.add(id);
+            const createdAt = typeof record.createdAt === 'string' && !Number.isNaN(Date.parse(record.createdAt))
+              ? record.createdAt
+              : new Date().toISOString();
+            const clean = {
+              id,
+              type: record.type,
+              date: String(record.date),
+              title: String(record.title),
+              status: record.status == null ? '' : String(record.status),
+              recorder: record.recorder == null ? '' : String(record.recorder),
+              details: String(record.details),
+              createdAt,
+              _cloudSynced: false
+            };
+            if (record.type === 'Incident Report') {
+              clean.outcome = record.outcome == null ? '' : String(record.outcome);
+            }
+            if (record.type === 'Attendance') {
+              clean.statuses = record.statuses && typeof record.statuses === 'object' ? record.statuses : {};
+            }
+            return clean;
+          });
           const existing = getRecords();
           const ids = new Set(existing.map(record => String(record.id)));
-          const additions = incoming.filter(record => !ids.has(String(record.id)));
+          const additions = sanitized.filter(record => !ids.has(record.id));
           if (saveLocal(RECORDS_KEY, [...additions, ...existing])) {
             renderRecords();
             showToast(`${additions.length} new record(s) imported. Existing kept.`, 'success');
