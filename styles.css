@@ -1299,6 +1299,37 @@
     .lock-box button:hover {
       background: var(--accent-hover);
     }
+    .lock-box .link-button {
+      width: auto;
+      margin: 12px auto 0;
+      padding: 4px 6px;
+      background: transparent;
+      color: #fde68a;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .lock-box .link-button:hover {
+      background: transparent;
+      color: #fff;
+    }
+    .forgot-pin-help {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid rgba(217, 119, 6, 0.4);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.07);
+      text-align: left;
+    }
+    .forgot-pin-help p {
+      margin: 0 0 6px;
+      color: #fef3c7;
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+    .forgot-pin-help p:last-child { margin-bottom: 0; }
+    .forgot-pin-help strong { color: #fff; }
     .shake {
       animation: shakeLock 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
     }
@@ -1483,6 +1514,8 @@
       .nav button svg { width: 17px; height: 17px; }
       .nav button[data-tab="log"] { flex-basis: 54px; min-width: 54px; margin-top: -18px; padding: 9px 2px 7px; }
       .nav button[data-tab="log"] svg { width: 19px; height: 19px; }
+      .admin-account { grid-template-columns: 1fr; }
+      .admin-account .toolbar { flex-wrap: wrap; }
       .summary-grid, .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
       .workflow-grid { grid-template-columns: 1fr; }
       .directory-grid { grid-template-columns: 1fr; }

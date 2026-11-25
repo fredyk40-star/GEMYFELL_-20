@@ -14,6 +14,7 @@ process.env.TURSO_AUTH_TOKEN = 'test-token';
 const { ensureAuthSchema, getClient, hashSessionToken } = await import('../lib/auth.js');
 const authHandler = (await import('../api/auth.js')).default;
 const recordsHandler = (await import('../api/records.js')).default;
+const adminsHandler = (await import('../api/admins.js')).default;
 const auditHandler = (await import('../api/audit.js')).default;
 const phonesHandler = (await import('../api/phones.js')).default;
 const rollcallHandler = (await import('../api/rollcall.js')).default;
@@ -21,13 +22,15 @@ const rollcallHandler = (await import('../api/rollcall.js')).default;
 const TOKENS = {
   secretary: 'a'.repeat(43),
   attendance: 'b'.repeat(43),
-  viewer: 'c'.repeat(43)
+  viewer: 'c'.repeat(43),
+  superadmin: 'd'.repeat(43)
 };
 
 const ADMINS = [
   { phone: '+233200000001', name: 'Test Secretary', role: 'secretary', token: TOKENS.secretary },
   { phone: '+233200000002', name: 'Test Attendance', role: 'attendance', token: TOKENS.attendance },
-  { phone: '+233200000003', name: 'Test Viewer', role: 'viewer', token: TOKENS.viewer }
+  { phone: '+233200000003', name: 'Test Viewer', role: 'viewer', token: TOKENS.viewer },
+  { phone: '+233200000004', name: 'Test Superadmin', role: 'superadmin', token: TOKENS.superadmin }
 ];
 
 let db;
@@ -522,4 +525,76 @@ test('rollcall: invalid dates and invalid status values are rejected', async () 
   });
   assert.equal(untouched.status, 200);
   assert.deepEqual(untouched.payload.statuses ?? {}, {});
+});
+
+test('admins: dedicated management data, backup superadmin, and PIN resets', async () => {
+  const denied = await call(adminsHandler, 'GET', undefined, TOKENS.secretary);
+  assert.equal(denied.status, 403);
+
+  const listed = await call(adminsHandler, 'GET', undefined, TOKENS.superadmin);
+  assert.equal(listed.status, 200);
+  assert.ok(listed.payload.admins.some(row => row.role === 'superadmin'));
+
+  const backupPhone = '+233200000014';
+  const backup = await call(
+    adminsHandler,
+    'POST',
+    { action: 'create', name: 'Backup Superadmin', phone: backupPhone, role: 'superadmin' },
+    TOKENS.superadmin
+  );
+  assert.equal(backup.status, 201);
+  assert.ok(backup.payload.temporaryPassword, 'backup superadmin should receive a one-time password');
+
+  const third = await call(
+    adminsHandler,
+    'POST',
+    { action: 'create', name: 'Third Superadmin', phone: '+233200000015', role: 'superadmin' },
+    TOKENS.superadmin
+  );
+  assert.equal(third.status, 409, 'only a primary and backup superadmin are allowed');
+
+  const protectedRole = await call(
+    adminsHandler,
+    'PATCH',
+    { phone: backupPhone, role: 'viewer' },
+    TOKENS.superadmin
+  );
+  assert.equal(protectedRole.status, 404, 'superadmin roles must not be changeable');
+
+  const selfReset = await call(
+    adminsHandler,
+    'POST',
+    { action: 'reset-password', phone: ADMINS[3].phone },
+    TOKENS.superadmin
+  );
+  assert.equal(selfReset.status, 400, 'a superadmin cannot reset their own PIN while signed in');
+
+  const targetPhone = '+233200000016';
+  const target = await call(
+    adminsHandler,
+    'POST',
+    { action: 'create', name: 'Reset Target', phone: targetPhone, role: 'viewer' },
+    TOKENS.superadmin
+  );
+  assert.equal(target.status, 201);
+
+  const reset = await call(
+    adminsHandler,
+    'POST',
+    { action: 'reset-password', phone: targetPhone },
+    TOKENS.superadmin
+  );
+  assert.equal(reset.status, 200);
+  assert.ok(reset.payload.temporaryPassword, 'reset should return a one-time password');
+
+  const afterReset = await call(authHandler, 'GET', undefined, TOKENS.superadmin);
+  assert.equal(afterReset.status, 200, 'resetting another account must not end the actor session');
+
+  const missing = await call(
+    adminsHandler,
+    'POST',
+    { action: 'reset-password', phone: '+233200000099' },
+    TOKENS.superadmin
+  );
+  assert.equal(missing.status, 404);
 });

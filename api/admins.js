@@ -34,7 +34,7 @@ async function generateTemporaryPassword(db, phone) {
   const passwordHash = await hashSecret(temporaryPassword);
   const updated = await db.execute({
     sql: `UPDATE admins SET pin_hash = NULL, temp_password_hash = ?, must_set_pin = 1
-      WHERE phone = ? AND role != 'superadmin'`,
+      WHERE phone = ?`,
     args: [passwordHash, phone]
   });
   if (Number(updated.rowsAffected) !== 1) throw new ApiError(404, 'Administrator account not found.');
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
   try {
     const db = getClient();
     await ensureAuthSchema(db);
-    await requireSuperadmin(req, db);
+    const actor = await requireSuperadmin(req, db);
 
     if (method === 'GET') {
       const result = await db.execute(
@@ -71,7 +71,15 @@ export default async function handler(req, res) {
       const role = body.role;
       if (!phone) return sendError(res, 400, 'Enter a Ghanaian phone number in 0XXXXXXXXX or +233XXXXXXXXX format.');
       if (!name || name.length > 100) return sendError(res, 400, 'Enter a name between 1 and 100 characters.');
-      if (!isValidRole(role)) return sendError(res, 400, 'Select an allowed administrator role.');
+      if (!isValidRole(role, { allowSuperadmin: role === 'superadmin' })) {
+        return sendError(res, 400, 'Select an allowed administrator role.');
+      }
+      if (role === 'superadmin') {
+        const count = await db.execute("SELECT COUNT(*) AS total FROM admins WHERE role = 'superadmin'");
+        if (Number(count.rows[0]?.total) >= 2) {
+          return sendError(res, 409, 'The primary and backup Superadmin accounts already exist.');
+        }
+      }
 
       const temporaryPassword = createTemporaryPassword();
       const tempHash = await hashSecret(temporaryPassword);
@@ -102,8 +110,11 @@ export default async function handler(req, res) {
         sql: 'SELECT role FROM admins WHERE phone = ?',
         args: [phone]
       });
-      if (!target.rows.length || target.rows[0].role === 'superadmin') {
+      if (!target.rows.length) {
         return sendError(res, 404, 'Administrator account not found.');
+      }
+      if (normalizePhone(actor.phone) === phone) {
+        return sendError(res, 400, 'You cannot reset your own PIN while signed in. Ask the other Superadmin.');
       }
       const temporaryPassword = await generateTemporaryPassword(db, phone);
       return res.status(200).json({ success: true, temporaryPassword });

@@ -171,6 +171,16 @@
       return payload;
     }
 
+    function toggleForgotPinHelp() {
+      const help = document.getElementById('forgot-pin-help');
+      const button = document.getElementById('forgot-pin-toggle');
+      if (!help || !button) return;
+      const opening = help.classList.contains('hidden');
+      help.classList.toggle('hidden', !opening);
+      button.textContent = opening ? 'Hide PIN reset steps' : 'Forgot your PIN?';
+      button.setAttribute('aria-expanded', String(opening));
+    }
+
     async function loginAdmin() {
       const phone = document.getElementById('login-phone').value.trim();
       const credential = document.getElementById('login-credential').value;
@@ -267,7 +277,7 @@
     function applyRoleAccess() {
       if (!currentAdmin) return;
       const tabsByRole = {
-        superadmin: ['home', 'team', 'roll', 'log', 'messages', 'logs'],
+        superadmin: ['home', 'team', 'roll', 'log', 'messages', 'logs', 'admin'],
         secretary: ['home', 'team', 'roll', 'log', 'messages', 'logs'],
         disciplinary: ['home', 'team', 'log', 'messages', 'logs'],
         attendance: ['home', 'team', 'roll', 'logs'],
@@ -281,7 +291,6 @@
         const name = section.id.replace('tab-', '');
         if (!allowed.includes(name)) section.classList.add('hidden');
       });
-      document.getElementById('admin-management').classList.toggle('hidden', currentAdmin.role !== 'superadmin');
       if (currentAdmin.role === 'superadmin') void loadAdminAccounts();
 
       const phoneToggle = document.getElementById('phone-toggle');
@@ -423,25 +432,30 @@
       const list = document.getElementById('admin-list');
       try {
         const payload = await adminApi();
-        list.innerHTML = payload.admins.map(admin => `
+        const samePhone = (left, right) => String(left || '').replace(/\D/g, '') === String(right || '').replace(/\D/g, '');
+        list.innerHTML = payload.admins.map(admin => {
+          const isSuper = admin.role === 'superadmin';
+          const isSelf = samePhone(currentAdmin?.phone, admin.phone);
+          return `
           <div class="admin-account">
             <div>
               <strong>${escapeHtml(admin.name)}</strong>
               <div class="record-meta">${escapeHtml(admin.phone)} · ${admin.active ? 'Active' : 'Disabled'}</div>
             </div>
-            ${admin.role === 'superadmin' ? `<strong>${roleLabel(admin.role)} (protected)</strong>` : `
-              <select aria-label="Role for ${escapeHtml(admin.name)}" data-admin-role="${escapeHtml(admin.phone)}">
+            ${isSuper
+              ? `<div><strong>${roleLabel(admin.role)}</strong><div class="record-meta">Protected account</div></div>`
+              : `<select aria-label="Role for ${escapeHtml(admin.name)}" data-admin-role="${escapeHtml(admin.phone)}">
                 ${['secretary', 'disciplinary', 'attendance', 'viewer'].map(role =>
                   `<option value="${role}" ${role === admin.role ? 'selected' : ''}>${roleLabel(role)}</option>`
                 ).join('')}
-              </select>
-              <div class="toolbar">
-                <button class="button-small secondary" data-admin-action="save-role" data-phone="${escapeHtml(admin.phone)}">Save Role</button>
-                <button class="button-small gold" data-admin-action="reset-password" data-phone="${escapeHtml(admin.phone)}">New Temp Password</button>
-                <button class="button-small ${admin.active ? 'danger' : 'whatsapp'}" data-admin-action="toggle-active" data-phone="${escapeHtml(admin.phone)}" data-active="${admin.active}">${admin.active ? 'Disable' : 'Enable'}</button>
-              </div>
-            `}
-          </div>`).join('');
+              </select>`}
+            <div class="toolbar">
+              ${isSuper ? '' : `<button class="button-small secondary" data-admin-action="save-role" data-phone="${escapeHtml(admin.phone)}">Save Role</button>`}
+              ${isSelf ? `<span class="record-meta">You are signed in as this account</span>` : `<button class="button-small gold" data-admin-action="reset-password" data-phone="${escapeHtml(admin.phone)}">Reset PIN</button>`}
+              ${isSuper ? '' : `<button class="button-small ${admin.active ? 'danger' : 'whatsapp'}" data-admin-action="toggle-active" data-phone="${escapeHtml(admin.phone)}" data-active="${admin.active}">${admin.active ? 'Disable' : 'Enable'}</button>`}
+            </div>
+          </div>`;
+        }).join('');
         list.querySelectorAll('[data-admin-action]').forEach(button => button.addEventListener('click', () => {
           const { adminAction, phone, active } = button.dataset;
           if (adminAction === 'save-role') void updateAdminRole(phone, list.querySelector(`[data-admin-role="${CSS.escape(phone)}"]`)?.value);
@@ -981,6 +995,7 @@
       if (name === 'home') renderDashboard();
       if (name === 'team' && !editingPhones && navigator.onLine) void syncCommitteePhones();
       if (name === 'roll') onRollDateChange();
+      if (name === 'admin' && currentAdmin?.role === 'superadmin') void loadAdminAccounts();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 

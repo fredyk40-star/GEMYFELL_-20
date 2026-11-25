@@ -46,6 +46,12 @@
           <input type="password" id="login-credential" autocomplete="current-password" maxlength="128" />
           <button id="login-submit" type="submit">Sign In</button>
         </form>
+        <button id="forgot-pin-toggle" class="link-button" type="button" onclick="toggleForgotPinHelp()">Forgot your PIN?</button>
+        <div id="forgot-pin-help" class="forgot-pin-help hidden">
+          <p><strong>PIN resets are done by a Superadmin only.</strong></p>
+          <p>Call Brother Fred (Superadmin) or the Backup Superadmin from the committee directory and ask them to open <strong>Admin → Reset PIN</strong> for your phone number.</p>
+          <p>They will give you a one-time password privately. Sign in with it, then choose a new four-digit PIN.</p>
+        </div>
       </div>
       <div id="pin-setup-fields" class="hidden">
         <form id="pin-setup-form" autocomplete="on">
@@ -127,6 +133,7 @@
           <div class="guide-step"><span class="guide-num">4</span><div><strong>Messages</strong><span>Generate polite, standardized WhatsApp caution notes, committee hearing summons, or worker commendations in one tap. You can also fill a message from a saved case.</span></div></div>
           <div class="guide-step"><span class="guide-num">5</span><div><strong>Logs &amp; PDF</strong><span>Review past records, update case statuses from Pending to Resolved, sync across devices via Turso Cloud, or print an official PDF summary for church leadership.</span></div></div>
         </div>
+        <p class="hint">For Brother Fred and the Backup Superadmin: the <strong>Admin</strong> tab manages sign-in accounts and one-time PIN resets. If anyone forgets a PIN, ask either Superadmin to reset it there.</p>
 
         <h3 class="guide-section-title">Offline &amp; Privacy Note</h3>
         <div class="notes-callout">
@@ -192,27 +199,6 @@
         </div>
       </div>
 
-      <div id="admin-management" class="card hidden">
-        <h2>Administrator Management</h2>
-        <p class="hint">Temporary passwords are displayed only once. Share them privately; the recipient must set a new PIN at first sign-in.</p>
-        <form id="create-admin-form">
-          <label for="new-admin-name">Administrator Name</label>
-          <input id="new-admin-name" name="name" maxlength="100" required />
-          <label for="new-admin-phone">Ghana Phone Number</label>
-          <input id="new-admin-phone" name="phone" type="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" required />
-          <label for="new-admin-role">Role</label>
-          <select id="new-admin-role" name="role" required>
-            <option value="secretary">Secretary</option>
-            <option value="disciplinary">Disciplinary</option>
-            <option value="attendance">Attendance</option>
-            <option value="viewer">Viewer (read only)</option>
-          </select>
-          <button type="submit">Create Administrator</button>
-        </form>
-        <div id="new-admin-result" class="hidden" role="status"></div>
-        <h3>Current Accounts</h3>
-        <div id="admin-list"></div>
-      </div>
     </section>
 
     <!-- TAB 2: Roll Call -->
@@ -553,6 +539,46 @@
         <div id="audit-list"></div>
       </div>
     </section>
+
+    <!-- TAB 7: Administrator Management (Superadmin only) -->
+    <section id="tab-admin" class="tab-section hidden">
+      <div class="card">
+        <h2>Administrator Accounts</h2>
+        <p class="hint">Only the Superadmin can open this page. Temporary passwords and PIN resets are shown once — write them down and deliver them privately.</p>
+        <form id="create-admin-form">
+          <label for="new-admin-name">Administrator Name</label>
+          <input id="new-admin-name" name="name" maxlength="100" required />
+          <label for="new-admin-phone">Ghana Phone Number</label>
+          <input id="new-admin-phone" name="phone" type="tel" placeholder="+233XXXXXXXXX or 0XXXXXXXXX" required />
+          <label for="new-admin-role">Role</label>
+          <select id="new-admin-role" name="role" required>
+            <option value="secretary">Secretary</option>
+            <option value="disciplinary">Disciplinary</option>
+            <option value="attendance">Attendance</option>
+            <option value="viewer">Viewer (read only)</option>
+            <option value="superadmin">Backup Superadmin (can reset PINs)</option>
+          </select>
+          <button type="submit">Create Administrator</button>
+        </form>
+        <div id="new-admin-result" class="hidden" role="status"></div>
+        <h3>Current Accounts</h3>
+        <p class="hint">Superadmin accounts are protected: their role cannot be changed here, but the other Superadmin can reset their PIN if it is forgotten.</p>
+        <div id="admin-list"></div>
+      </div>
+
+      <div class="card notes-card">
+        <h2>Forgotten PIN — What To Do</h2>
+        <p>PINs cannot be recovered from this device. For security, only a Superadmin can issue a new one-time password. There are two Superadmins so that one absent person never blocks the committee.</p>
+        <div class="guide-flow">
+          <div class="guide-step"><span class="guide-num">1</span><div><strong>Call a Superadmin</strong><span>Contact Brother Fred (primary) or the Backup Superadmin from the committee directory. Ask them to open Admin → Reset PIN for your phone number.</span></div></div>
+          <div class="guide-step"><span class="guide-num">2</span><div><strong>Get a one-time password</strong><span>They will see it once on their screen and will give it to you privately. It expires on first use.</span></div></div>
+          <div class="guide-step"><span class="guide-num">3</span><div><strong>Sign in with your phone number</strong><span>Enter your registered phone number and the one-time password in the sign-in box.</span></div></div>
+          <div class="guide-step"><span class="guide-num">4</span><div><strong>Choose a new four-digit PIN</strong><span>The app will ask you to create and confirm a new PIN. Keep it private and do not share it in a group chat.</span></div></div>
+          <div class="guide-step"><span class="guide-num">5</span><div><strong>Carry on</strong><span>Old sessions are signed out automatically, so only your new sign-in remains active.</span></div></div>
+        </div>
+        <p class="hint">If both Superadmins are unavailable, arrange a brief call with one of them — PIN resets cannot be done from the phone itself.</p>
+      </div>
+    </section>
   </main>
 
   <!-- Modern Floating Dock Navigation -->
@@ -580,6 +606,10 @@
     <button data-tab="logs" onclick="switchTab('logs', this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
       <span>Logs &amp; PDF</span>
+    </button>
+    <button data-tab="admin" onclick="switchTab('admin', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+      <span>Admin</span>
     </button>
   </nav>
 
