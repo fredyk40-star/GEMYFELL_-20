@@ -8,6 +8,7 @@
     const ROLLCALLS_KEY = 'gemyfell_shared_rollcalls';
     const PENDING_ROLLCALL_KEY = 'gemyfell_pending_rollcalls';
     const EXTRA_MEMBERS_KEY = 'gemyfell_extra_members';
+    const MESSAGE_HISTORY_KEY = 'gemyfell_message_history';
     const STATUSES = ['Present', 'Late', 'Excused', 'Absent'];
     const ALLOWED_RECORD_TYPES = new Set(['Incident Report', 'Meeting Minutes', 'Attendance']);
     const TEAM_GROUPS = [
@@ -1543,6 +1544,117 @@
       document.getElementById('minutes-fields').classList.toggle('hidden', !minutes);
     }
 
+    // Structured minutes builder
+    function renumberAgendaItems() {
+      document.querySelectorAll('#agenda-list .agenda-item').forEach((item, index) => {
+        const label = item.querySelector('.agenda-head span');
+        if (label) label.textContent = `Item ${index + 1}`;
+      });
+    }
+
+    function addAgendaItem(data = {}) {
+      const list = document.getElementById('agenda-list');
+      if (!list) return;
+      const item = document.createElement('div');
+      item.className = 'agenda-item';
+      item.innerHTML = `
+        <div class="agenda-head">
+          <span>Item</span>
+          <button class="agenda-remove" type="button" onclick="removeAgendaItem(this)">Remove</button>
+        </div>
+        <label>Topic / Decision</label>
+        <input class="agenda-topic" type="text" placeholder="e.g. Rehearsal" value="${escapeHtml(data.topic || '')}" />
+        <label>Details</label>
+        <textarea class="agenda-detail" rows="2" placeholder="What was agreed">${escapeHtml(data.detail || '')}</textarea>
+        <label>Who &amp; When</label>
+        <input class="agenda-action" type="text" placeholder="e.g. Mark and Patrick - before Wednesday rehearsal" value="${escapeHtml(data.action || '')}" />`;
+      list.appendChild(item);
+      renumberAgendaItems();
+    }
+
+    function removeAgendaItem(button) {
+      button.closest('.agenda-item')?.remove();
+      renumberAgendaItems();
+    }
+
+    function getAgendaItems() {
+      return [...document.querySelectorAll('#agenda-list .agenda-item')].map(item => ({
+        topic: item.querySelector('.agenda-topic')?.value.trim() || '',
+        detail: item.querySelector('.agenda-detail')?.value.trim() || '',
+        action: item.querySelector('.agenda-action')?.value.trim() || ''
+      })).filter(item => item.topic || item.detail || item.action);
+    }
+
+    function clearAgendaItems() {
+      const list = document.getElementById('agenda-list');
+      if (!list) return;
+      list.innerHTML = '';
+      addAgendaItem();
+    }
+
+    function formatMeetingDate(value) {
+      if (!value) return localDateValue();
+      const date = new Date(`${value}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return value;
+      return date.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function formatMeetingTime(value) {
+      if (!value) return '';
+      const [hours, minutes] = value.split(':').map(Number);
+      if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return value;
+      const suffix = hours >= 12 ? 'PM' : 'AM';
+      return `${hours % 12 || 12}:${String(minutes).padStart(2, '0')} ${suffix}`;
+    }
+
+    function valueOf(id) {
+      return document.getElementById(id)?.value.trim() || '';
+    }
+
+    function buildMinutesDetails() {
+      const agenda = getAgendaItems();
+      const notes = valueOf('min-notes');
+      const time = formatMeetingTime(valueOf('min-time'));
+      const lines = [`Date: ${formatMeetingDate(valueOf('min-date'))}${time ? ` | Time: ${time}` : ''}`];
+      const place = valueOf('min-place');
+      if (place) lines.push(`Place: ${place}`);
+      lines.push(`By: ${valueOf('min-recorded-by')}`);
+
+      lines.push('', '1. Attendance');
+      lines.push(`Present: ${valueOf('min-present') || 'Not recorded'}`);
+      const apology = valueOf('min-apology');
+      if (apology) lines.push(`Absent with apology: ${apology}`);
+
+      lines.push('', '2. Opening');
+      const opening = valueOf('min-opening');
+      if (opening) lines.push(`Prayer: ${opening}`);
+      lines.push('Chairman welcomed all.');
+
+      lines.push('', '3. Last minutes');
+      lines.push(valueOf('min-last') || 'Read and adopted.');
+
+      lines.push('', '4. Decisions');
+      agenda.forEach((item, index) => {
+        lines.push(`${index + 1}. ${item.topic}${item.detail ? `: ${item.detail}` : ''}`);
+        if (item.action) lines.push(`   Who: ${item.action}`);
+      });
+
+      let section = 5;
+      if (notes) {
+        lines.push('', `${section}. Other Matters`);
+        lines.push(notes);
+        section += 1;
+      }
+      lines.push('', `${section}. Close`);
+      const next = valueOf('min-next');
+      if (next) lines.push(`Next meeting: ${next}`);
+      const close = valueOf('min-close');
+      if (close) lines.push(`Prayer: ${close}`);
+      const sign = valueOf('min-sign');
+      if (sign) lines.push('', `Signed: ${sign}`);
+      return lines.join('\n');
+    }
+
     function storeRecord(record) {
       if (!currentAdmin || !canWriteRecordType(record.type)) {
         showToast('Your account role cannot save this type of record.', 'error');
@@ -1555,6 +1667,7 @@
       records.unshift(record);
       if (!saveLocal(RECORDS_KEY, records)) return false;
       void queueRecordForCloud(record);
+      if (record.type === 'Incident Report') refreshMessageCaseOptions();
       return true;
     }
 
@@ -1588,9 +1701,9 @@
         document.getElementById('inc-status').value = 'Pending';
         document.getElementById('inc-stage').value = 'Open';
       } else {
-        const notes = document.getElementById('min-notes').value.trim();
-        if (!notes) {
-          showToast('Enter cases reviewed and committee decisions.', 'warning');
+        const agenda = getAgendaItems().filter(item => item.topic);
+        if (!agenda.length) {
+          showToast('Add at least one decision / action item.', 'warning');
           return;
         }
         record = {
@@ -1599,10 +1712,15 @@
           date: document.getElementById('min-date').value || localDateValue(),
           title: 'Committee Meeting Minutes',
           recorder: document.getElementById('min-recorded-by').value,
-          details: `Recorded By: ${document.getElementById('min-recorded-by').value}\nMembers Present: ${document.getElementById('min-present').value.trim() || 'Not recorded'}\nCases Reviewed & Decisions: ${notes}`
+          details: buildMinutesDetails()
         };
-        ['min-date', 'min-present', 'min-notes'].forEach(id => document.getElementById(id).value = '');
+        ['min-date', 'min-time', 'min-place', 'min-present', 'min-apology', 'min-opening',
+          'min-last', 'min-next', 'min-close', 'min-sign', 'min-notes'].forEach(id => {
+          const field = document.getElementById(id);
+          if (field) field.value = '';
+        });
         document.getElementById('min-recorded-by').selectedIndex = 0;
+        clearAgendaItems();
       }
       if (storeRecord(record)) {
         showToast(`${type} saved offline.`, 'success');
@@ -1616,8 +1734,7 @@
       const recipient = document.getElementById('msg-recipient').value.trim() || '[Recipient Name]';
       const department = document.getElementById('msg-department').value.trim() || '[Department]';
       const note = document.getElementById('msg-note').value.trim();
-      const summons = template === 'summons';
-      document.getElementById('summons-fields').classList.toggle('hidden', !summons);
+      document.getElementById('summons-fields').classList.toggle('hidden', template !== 'summons');
       const date = document.getElementById('msg-date').value || '[Date]';
       const time = document.getElementById('msg-time').value || '[Time]';
       const venue = document.getElementById('msg-venue').value.trim() || '[Venue]';
@@ -1626,24 +1743,140 @@
         message = `Dear ${recipient},\n\nGreetings in Christ from the GEMYFELL @20 Secretariat. This is a respectful reminder regarding ${note || 'our worker and volunteer expectations'}${department ? ` in the ${department} team` : ''}. We appreciate your understanding and continued service. Please contact the Secretariat if you need to discuss this further.`;
       } else if (template === 'summons') {
         message = `Dear ${recipient},\n\nGreetings in Christ from the GEMYFELL @20 Secretariat. You are respectfully invited to attend a Disciplinary Committee hearing${department ? ` concerning ${department}` : ''}.\n\nDate: ${date}\nTime: ${time}\nVenue: ${venue}\n\n${note || 'Please attend to share any relevant information. The committee will hear the matter fairly, prayerfully, and respectfully.'}`;
+      } else if (template === 'followup') {
+        message = `Dear ${recipient},\n\nGreetings in Christ from the GEMYFELL @20 Secretariat. We are following up on the committee matter${department ? ` concerning the ${department} team` : ''}.\n\n${note || 'Please let us know the current status and any support you need.'}\n\nWe appreciate your cooperation and will close the matter respectfully once your response is received.`;
+      } else if (template === 'ruling') {
+        message = `Dear ${recipient},\n\nGreetings in Christ. The Disciplinary Committee has concluded its review${department ? ` of the matter concerning the ${department} team` : ''}.\n\n${note || 'The committee decision has been recorded and will be communicated to you separately.'}\n\nWe thank you for your honesty and cooperation throughout the process.`;
+      } else if (template === 'general') {
+        message = `Dear ${recipient},\n\nGreetings in Christ from the GEMYFELL @20 Secretariat${department ? ` and the ${department} team` : ''}.\n\n${note || 'This message is to keep you informed.'}\n\nPlease contact the Secretariat if you have any questions.`;
       } else {
         message = `Dear ${recipient},\n\nThe GEMYFELL @20 Secretariat and Disciplinary Committee sincerely thank you for your exemplary service${department ? ` with the ${department} team` : ''}. ${note || 'Your dedication, spiritual commitment, and positive example are greatly appreciated.'}\n\nThank you for faithfully serving our church community.`;
       }
-      document.getElementById('message-preview').textContent = `${message}\n\nKind regards,\nSecretariat — GEMYFELL @20 Disciplinary Committee`;
+      const caseId = document.getElementById('msg-case-id')?.value.trim() || '';
+      document.getElementById('message-preview').textContent =
+        `${message}${caseId ? `\n\nCase reference: ${caseId}` : ''}\n\nKind regards,\nSecretariat — GEMYFELL @20 Disciplinary Committee`;
+    }
+
+    function refreshMessageCaseOptions() {
+      const select = document.getElementById('message-case');
+      if (!select) return;
+      const cases = getRecords().filter(record => record.type === 'Incident Report');
+      const previous = select.value;
+      select.innerHTML = '<option value="">Choose an incident report…</option>' + cases.map(record =>
+        `<option value="${escapeHtml(record.id)}">${escapeHtml(`${record.date || ''} — ${record.title || ''}${record.status ? ` (${record.status})` : ''}`)}</option>`
+      ).join('');
+      if (cases.some(record => String(record.id) === previous)) select.value = previous;
+    }
+
+    function prefillMessageFromCase() {
+      const id = document.getElementById('message-case')?.value;
+      if (!id) {
+        showToast('Choose a saved case first.', 'warning');
+        return;
+      }
+      const record = getRecords().find(item => String(item.id) === String(id));
+      if (!record) {
+        showToast('That case is no longer on this device.', 'error');
+        return;
+      }
+      const parts = String(record.title || '').split('—').map(part => part.trim());
+      document.getElementById('msg-recipient').value = parts[0] || '';
+      document.getElementById('msg-department').value = parts[1] || '';
+      document.getElementById('msg-case-id').value = record.id;
+      document.getElementById('msg-note').value = [
+        record.details,
+        record.assignee ? `Assigned officer: ${record.assignee}` : '',
+        record.dueDate ? `Due date: ${record.dueDate}` : ''
+      ].filter(Boolean).join('\n');
+      document.getElementById('msg-date').value = record.dueDate || '';
+      document.getElementById('message-template').value =
+        record.status === 'Resolved' || record.stage === 'Closed' ? 'ruling'
+          : record.dueDate ? 'summons' : 'followup';
+      updateMessagePreview();
+      showToast('Case details added to the message.', 'success');
+    }
+
+    function getMessageHistory() {
+      const history = safeRead(MESSAGE_HISTORY_KEY, []);
+      return Array.isArray(history) ? history : [];
+    }
+
+    function saveMessageToHistory(template, recipient, text) {
+      if (!text.trim()) return;
+      const history = getMessageHistory();
+      history.unshift({ at: new Date().toISOString(), template, recipient, text });
+      if (saveLocal(MESSAGE_HISTORY_KEY, history.slice(0, 20))) renderMessageHistory();
+    }
+
+    function messageTemplateLabel(value) {
+      const options = [...(document.getElementById('message-template')?.options || [])];
+      return options.find(option => option.value === value)?.textContent || 'Official Message';
+    }
+
+    function renderMessageHistory() {
+      const container = document.getElementById('message-history');
+      if (!container) return;
+      const history = getMessageHistory();
+      if (!history.length) {
+        container.innerHTML = '<p class="hint">No messages composed yet. Your last 20 messages will appear here.</p>';
+        return;
+      }
+      container.innerHTML = history.map((entry, index) => `
+        <div class="message-item">
+          <strong>${escapeHtml(messageTemplateLabel(entry.template))} · ${escapeHtml(entry.recipient || 'No recipient')}</strong>
+          <span>${escapeHtml(new Date(entry.at).toLocaleString())}</span>
+          <pre>${escapeHtml(entry.text)}</pre>
+          <div class="toolbar">
+            <button class="button-small secondary" type="button" onclick="reuseMessage(${index})">Use again</button>
+            <button class="button-small secondary" type="button" onclick="deleteMessage(${index})">Remove</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function reuseMessage(index) {
+      const entry = getMessageHistory()[index];
+      if (!entry) return;
+      if (entry.template) document.getElementById('message-template').value = entry.template;
+      if (entry.recipient) document.getElementById('msg-recipient').value = entry.recipient;
+      document.getElementById('msg-note').value = entry.text
+        .replace(/\n\n(Case reference:[^\n]*\n\n)?Kind regards,\nSecretariat — GEMYFELL @20 Disciplinary Committee$/, '');
+      updateMessagePreview();
+      document.getElementById('message-preview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      showToast('Message loaded into the composer.', 'success');
+    }
+
+    function deleteMessage(index) {
+      const history = getMessageHistory();
+      if (!history[index]) return;
+      history.splice(index, 1);
+      if (saveLocal(MESSAGE_HISTORY_KEY, history)) renderMessageHistory();
+    }
+
+    function clearMessageHistory() {
+      if (!confirm('Clear all saved message history on this device?')) return;
+      if (saveLocal(MESSAGE_HISTORY_KEY, [])) {
+        renderMessageHistory();
+        showToast('Message history cleared.', 'success');
+      }
     }
 
     function sendMessage() {
       const text = document.getElementById('message-preview').textContent;
+      saveMessageToHistory(document.getElementById('message-template').value,
+        document.getElementById('msg-recipient').value.trim(), text);
       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
     }
 
     async function copyMessage() {
+      const text = document.getElementById('message-preview').textContent;
+      saveMessageToHistory(document.getElementById('message-template').value,
+        document.getElementById('msg-recipient').value.trim(), text);
       try {
-        await navigator.clipboard.writeText(document.getElementById('message-preview').textContent);
+        await navigator.clipboard.writeText(text);
         showToast('Official message copied to clipboard.', 'success');
       } catch (error) {
         const field = document.createElement('textarea');
-        field.value = document.getElementById('message-preview').textContent;
+        field.value = text;
         document.body.appendChild(field);
         field.select();
         const copied = document.execCommand('copy');
@@ -1821,6 +2054,7 @@
         if (button.dataset.action === 'share') shareRecord(record);
         if (button.dataset.action === 'delete') deleteRecord(record.id);
       }));
+      refreshMessageCaseOptions();
       renderDashboard();
     }
 
@@ -2080,6 +2314,10 @@
         el.addEventListener('change', updateMessagePreview);
       }
     });
+    document.getElementById('message-case')?.addEventListener('change', () => {
+      document.getElementById('msg-case-id').value = '';
+      updateMessagePreview();
+    });
 
     document.getElementById('roll-date').value = localDateValue();
     const assigneeOptions = document.getElementById('committee-options');
@@ -2087,9 +2325,12 @@
       assigneeOptions.innerHTML = [...new Set(TEAM_GROUPS.flatMap(group => group.people.map(person => person.name)))]
         .map(name => `<option value="${escapeHtml(name)}"></option>`).join('');
     }
+    addAgendaItem();
     renderDirectory();
     renderDashboard();
     onRollDateChange();
+    refreshMessageCaseOptions();
+    renderMessageHistory();
     updateMessagePreview();
     updateCloudStatus(!navigator.onLine ? 'offline' : 'authRequired');
     window.addEventListener('online', () => {

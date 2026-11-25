@@ -296,21 +296,66 @@
         </div>
 
         <div id="minutes-fields" class="hidden">
-          <label for="min-date">Meeting Date</label>
-          <input type="date" id="min-date" />
-          
-          <label for="min-recorded-by">Recorded By</label>
-          <select id="min-recorded-by">
-            <option>Brother Fred - Secretary</option>
-            <option>Miss Boahemaa - Vice Secretary</option>
-            <option>Other Secretariat Officer</option>
-          </select>
-          
+          <div class="minutes-grid">
+            <div>
+              <label for="min-date">Meeting Date</label>
+              <input type="date" id="min-date" />
+            </div>
+            <div>
+              <label for="min-time">Meeting Time</label>
+              <input type="time" id="min-time" />
+            </div>
+            <div>
+              <label for="min-place">Place</label>
+              <input id="min-place" type="text" placeholder="e.g. Church Conference Room" />
+            </div>
+            <div>
+              <label for="min-recorded-by">Recorded By</label>
+              <select id="min-recorded-by">
+                <option>Brother Fred - Secretary</option>
+                <option>Miss Boahemaa - Vice Secretary</option>
+                <option>Other Secretariat Officer</option>
+              </select>
+            </div>
+          </div>
+
           <label for="min-present">Members Present</label>
           <input id="min-present" type="text" placeholder="e.g. Brother Emma, Brother Danso, Brother Fred..." />
-          
-          <label for="min-notes">Cases Reviewed &amp; Committee Decisions</label>
-          <textarea id="min-notes" placeholder="Summarize disciplinary cases reviewed, committee resolutions, and assigned actions"></textarea>
+
+          <label for="min-apology">Absent with Apology</label>
+          <input id="min-apology" type="text" placeholder="e.g. Esther, Janet" />
+
+          <div class="minutes-grid">
+            <div>
+              <label for="min-opening">Opening Prayer</label>
+              <input id="min-opening" type="text" placeholder="e.g. Elder Mark" />
+            </div>
+            <div>
+              <label for="min-last">Last Minutes</label>
+              <input id="min-last" type="text" placeholder="e.g. Read by Fred. No changes. Adopted." />
+            </div>
+          </div>
+
+          <h3>Decisions &amp; Assigned Actions</h3>
+          <div id="agenda-list"></div>
+          <button class="button-small secondary" type="button" onclick="addAgendaItem()">+ Add Decision / Action</button>
+
+          <div class="minutes-grid">
+            <div>
+              <label for="min-next">Next Meeting</label>
+              <input id="min-next" type="text" placeholder="e.g. Wed 25 Nov, 5:30 PM" />
+            </div>
+            <div>
+              <label for="min-close">Closing Prayer</label>
+              <input id="min-close" type="text" placeholder="e.g. Ellen" />
+            </div>
+          </div>
+
+          <label for="min-sign">Signed / Approved By</label>
+          <input id="min-sign" type="text" placeholder="e.g. Fred | Approved: Emma" />
+
+          <label for="min-notes">Other Matters / Additional Notes</label>
+          <textarea id="min-notes" placeholder="Anything else to record (optional)"></textarea>
         </div>
 
         <button class="wide" onclick="saveLog()">
@@ -328,8 +373,20 @@
         <select id="message-template">
           <option value="caution">Polite Caution / Disciplinary Reminder</option>
           <option value="summons">Formal Invitation / Summons to Committee Hearing</option>
+          <option value="followup">Follow-up on Assigned Action / Case</option>
+          <option value="ruling">Hearing Outcome / Committee Ruling</option>
           <option value="commendation">Commendation / Appreciation Note</option>
+          <option value="general">General Official Communication</option>
         </select>
+
+        <div class="message-case-bar">
+          <label for="message-case">Fill from a saved case</label>
+          <select id="message-case">
+            <option value="">Choose an incident report…</option>
+          </select>
+          <button class="button-small secondary" type="button" onclick="prefillMessageFromCase()">Use Case Details</button>
+          <input type="hidden" id="msg-case-id" />
+        </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
           <div>
@@ -375,6 +432,10 @@
             Copy Message Text
           </button>
         </div>
+
+        <h3>Recently Composed</h3>
+        <div id="message-history"></div>
+        <button class="button-small secondary" type="button" onclick="clearMessageHistory()">Clear history</button>
       </div>
     </section>
 
@@ -506,7 +567,7 @@
         <div class="guide-step"><span class="guide-num">3</span><div><strong>Team &amp; Rules</strong><span>Call committee members. Secretaries can edit numbers. Read the code of conduct.</span></div></div>
         <div class="guide-step"><span class="guide-num">4</span><div><strong>Roll Call</strong><span>Pick a date. Mark each person Present, Late, Excused, or Absent. It shares with other devices. Save, then share on WhatsApp.</span></div></div>
         <div class="guide-step"><span class="guide-num">5</span><div><strong>+ Log</strong><span>Write an Incident Report, Meeting Minutes, or Attendance. For cases, set officer, due date, and stage.</span></div></div>
-        <div class="guide-step"><span class="guide-num">6</span><div><strong>Messages</strong><span>Make an official message or summons. Copy it or send it on WhatsApp.</span></div></div>
+        <div class="guide-step"><span class="guide-num">6</span><div><strong>Messages</strong><span>Fill from a saved case, choose a template, then copy or send on WhatsApp. Recent messages stay on this device.</span></div></div>
         <div class="guide-step"><span class="guide-num">7</span><div><strong>Logs &amp; PDF</strong><span>Search, filter by date, export CSV, print PDF, and read the audit trail.</span></div></div>
         <div class="guide-step"><span class="guide-num">8</span><div><strong>Sync</strong><span>Work offline anytime. Tap Refresh / Sync Cloud when online. If two phones edit the same thing, choose which copy to keep.</span></div></div>
       </div>
