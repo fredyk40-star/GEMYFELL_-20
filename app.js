@@ -291,6 +291,7 @@
         const name = section.id.replace('tab-', '');
         if (!allowed.includes(name)) section.classList.add('hidden');
       });
+      document.getElementById('admin-shortcut')?.classList.toggle('hidden', currentAdmin.role !== 'superadmin');
       if (currentAdmin.role === 'superadmin') void loadAdminAccounts();
 
       const phoneToggle = document.getElementById('phone-toggle');
@@ -321,6 +322,7 @@
       document.getElementById('session-role').textContent = '';
       document.getElementById('session-avatar').textContent = '';
       document.getElementById('logout-button').classList.add('hidden');
+      document.getElementById('admin-shortcut')?.classList.add('hidden');
       document.getElementById('pin-error').textContent = message;
       updateCloudStatus('authRequired');
     }

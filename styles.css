@@ -1509,11 +1509,12 @@
       .session-role { font-size: 0.5rem; }
       .icon-button { width: 26px; height: 26px; flex-basis: 26px; }
       .icon-button svg { width: 13px; height: 13px; }
-      .nav { width: 96vw; gap: 2px; padding: 7px 6px; border-radius: 22px; }
-      .nav button { min-width: 46px; font-size: 0.62rem; padding: 7px 2px 6px; }
-      .nav button svg { width: 17px; height: 17px; }
-      .nav button[data-tab="log"] { flex-basis: 54px; min-width: 54px; margin-top: -18px; padding: 9px 2px 7px; }
-      .nav button[data-tab="log"] svg { width: 19px; height: 19px; }
+      /* Seven tabs (including Admin) must fit without hidden horizontal scrolling */
+      .nav { width: calc(100vw - 10px); gap: 1px; padding: 6px 4px; border-radius: 20px; }
+      .nav button { min-width: 0; font-size: 0.58rem; padding: 7px 1px 6px; gap: 3px; }
+      .nav button svg { width: 16px; height: 16px; }
+      .nav button[data-tab="log"] { flex: 0 0 50px; min-width: 50px; margin-top: -16px; padding: 8px 2px 7px; }
+      .nav button[data-tab="log"] svg { width: 18px; height: 18px; }
       .admin-account { grid-template-columns: 1fr; }
       .admin-account .toolbar { flex-wrap: wrap; }
       .summary-grid, .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1527,6 +1528,9 @@
       .header-copy h1 { font-size: 0.82rem; }
       .session-copy { display: none; }
       .header-session { padding: 3px 4px; }
+      .nav button { font-size: 0.53rem; padding: 6px 1px 5px; gap: 2px; }
+      .nav button svg { width: 15px; height: 15px; }
+      .nav button[data-tab="log"] { flex-basis: 46px; min-width: 46px; }
     }
 
     /* Accessibility: Reduced Motion */
