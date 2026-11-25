@@ -106,6 +106,35 @@
 
     <!-- TAB 1: Team & Rules -->
     <section id="tab-team" class="tab-section hidden">
+      <div class="card notes-card">
+        <h2>📝 Notes &amp; Guide — Welcome to GEMYFELL @20</h2>
+        <p>This is the official digital workspace for the <strong>GEMYFELL @20 Secretariat and Disciplinary Committee</strong>. It helps us keep order, accountability, and clear communication throughout the 20th-anniversary celebrations.</p>
+
+        <h3 class="guide-section-title">What This Portal Is For</h3>
+        <p>Every worker and leader can see the right information at the right time: who is serving, who is present, what was agreed, and what still needs attention. The portal keeps our records in one safe place instead of scattered phone notes and messages.</p>
+        <div class="guide-flowline">
+          <span class="guide-chip">Leadership</span><span class="guide-arrow">→</span>
+          <span class="guide-chip">Attendance</span><span class="guide-arrow">→</span>
+          <span class="guide-chip">Records</span><span class="guide-arrow">→</span>
+          <span class="guide-chip">Official Messages</span>
+        </div>
+
+        <h3 class="guide-section-title">How Each Section Works (Quick User Guide)</h3>
+        <div class="guide-flow">
+          <div class="guide-step"><span class="guide-num">1</span><div><strong>Team &amp; Rules</strong><span>View committee leadership contacts, tap a number to quick-dial, and read the 5-point Volunteer Code of Conduct. Secretaries can edit phone numbers.</span></div></div>
+          <div class="guide-step"><span class="guide-num">2</span><div><strong>Roll Call</strong><span>Take fast attendance — Present, Late, Excused, or Absent — during rehearsals, meetings, and anniversary days. Choose the date first, then tap each person's status.</span></div></div>
+          <div class="guide-step"><span class="guide-num">3</span><div><strong>+ Log (Incidents &amp; Minutes)</strong><span>Record factual incident reports, with optional compressed photo and 60-second voice notes, or take official committee meeting minutes with decisions and who will do what.</span></div></div>
+          <div class="guide-step"><span class="guide-num">4</span><div><strong>Messages</strong><span>Generate polite, standardized WhatsApp caution notes, committee hearing summons, or worker commendations in one tap. You can also fill a message from a saved case.</span></div></div>
+          <div class="guide-step"><span class="guide-num">5</span><div><strong>Logs &amp; PDF</strong><span>Review past records, update case statuses from Pending to Resolved, sync across devices via Turso Cloud, or print an official PDF summary for church leadership.</span></div></div>
+        </div>
+
+        <h3 class="guide-section-title">Offline &amp; Privacy Note</h3>
+        <div class="notes-callout">
+          <p>Your sign-in is PIN-protected, and each role only sees what it is allowed to see. Records are saved on this device, so the portal works 100% offline inside the auditorium when mobile signal drops. When the internet returns, changes sync automatically to the shared Turso cloud database so the Secretariat and committee see the same up-to-date information.</p>
+          <p class="hint">Tip: use the note button at the bottom-right any time for a short step-by-step reminder.</p>
+        </div>
+      </div>
+
       <div class="card">
         <h2>
           <span>Quick-Dial Committee Directory</span>
@@ -358,6 +387,23 @@
           <textarea id="min-notes" placeholder="Anything else to record (optional)"></textarea>
         </div>
 
+        <h3>Photo Evidence &amp; Voice Note</h3>
+        <p class="hint">Photos are resized to 800px and compressed for 3G. Voice notes stop automatically at 60 seconds.</p>
+
+        <label for="photo-input">Attach Photo Evidence</label>
+        <input type="file" id="photo-input" accept="image/*" capture="environment" onchange="void handlePhotoSelection(event)" />
+        <div id="photo-preview-wrap" class="attachment-preview hidden">
+          <img id="photo-preview" alt="Attached photo evidence preview" />
+          <button class="button-small secondary" type="button" onclick="removePhoto()">Remove Photo</button>
+        </div>
+
+        <button id="voice-toggle" class="secondary wide" type="button" onclick="void toggleVoiceRecording()">Record Voice Note (Max 60s)</button>
+        <p id="voice-status" class="hint" role="status">No voice note recorded.</p>
+        <div id="voice-player" class="attachment-preview hidden">
+          <audio id="voice-preview" controls></audio>
+          <button class="button-small secondary" type="button" onclick="removeVoiceNote()">Delete Voice Note</button>
+        </div>
+
         <button class="wide" onclick="saveLog()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Save Official Record Offline
@@ -566,7 +612,7 @@
         <div class="guide-step"><span class="guide-num">2</span><div><strong>Overview</strong><span>See open cases, resolved cases, minutes, attendance rate, and recent work.</span></div></div>
         <div class="guide-step"><span class="guide-num">3</span><div><strong>Team &amp; Rules</strong><span>Call committee members. Secretaries can edit numbers. Read the code of conduct.</span></div></div>
         <div class="guide-step"><span class="guide-num">4</span><div><strong>Roll Call</strong><span>Pick a date. Mark each person Present, Late, Excused, or Absent. It shares with other devices. Save, then share on WhatsApp.</span></div></div>
-        <div class="guide-step"><span class="guide-num">5</span><div><strong>+ Log</strong><span>Write an Incident Report, Meeting Minutes, or Attendance. For cases, set officer, due date, and stage.</span></div></div>
+        <div class="guide-step"><span class="guide-num">5</span><div><strong>+ Log</strong><span>Write an Incident Report or Minutes. Add a case officer, due date and stage. Attach a compressed photo or a 60-second voice note, then preview or delete before saving.</span></div></div>
         <div class="guide-step"><span class="guide-num">6</span><div><strong>Messages</strong><span>Fill from a saved case, choose a template, then copy or send on WhatsApp. Recent messages stay on this device.</span></div></div>
         <div class="guide-step"><span class="guide-num">7</span><div><strong>Logs &amp; PDF</strong><span>Search, filter by date, export CSV, print PDF, and read the audit trail.</span></div></div>
         <div class="guide-step"><span class="guide-num">8</span><div><strong>Sync</strong><span>Work offline anytime. Tap Refresh / Sync Cloud when online. If two phones edit the same thing, choose which copy to keep.</span></div></div>

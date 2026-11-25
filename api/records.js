@@ -50,6 +50,40 @@ async function ensureRecordColumns(db) {
   if (!columns.has('stage')) {
     await db.execute("ALTER TABLE records ADD COLUMN stage TEXT NOT NULL DEFAULT ''");
   }
+  if (!columns.has('photo_data')) {
+    try {
+      await db.execute('ALTER TABLE records ADD COLUMN photo_data TEXT');
+    } catch (error) {
+      if (!/duplicate column/i.test(String(error?.message || ''))) throw error;
+    }
+  }
+  if (!columns.has('audio_data')) {
+    try {
+      await db.execute('ALTER TABLE records ADD COLUMN audio_data TEXT');
+    } catch (error) {
+      if (!/duplicate column/i.test(String(error?.message || ''))) throw error;
+    }
+  }
+}
+
+function cleanDataUrl(value, kind) {
+  const text = value == null ? '' : String(value);
+  if (!text) return '';
+  const maxChars = kind === 'photo' ? 400000 : 600000;
+  if (text.length > maxChars) {
+    throw new ApiError(413, kind === 'photo'
+      ? 'Photo evidence is too large. Attach a smaller image.'
+      : 'Voice note is too long or too large.');
+  }
+  const pattern = kind === 'photo'
+    ? /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=\r\n]+$/
+    : /^data:audio\/(webm|ogg|mp4|mpeg|x-m4a|mp3)(;[^,]*)?;base64,[A-Za-z0-9+/=\r\n]+$/;
+  if (!pattern.test(text)) {
+    throw new ApiError(400, kind === 'photo'
+      ? 'Photo evidence must be a compressed JPEG, PNG or WebP data URL.'
+      : 'Voice note must be a supported audio data URL.');
+  }
+  return text;
 }
 
 function recordPayload(row) {
@@ -66,7 +100,9 @@ function recordPayload(row) {
     assignee: String(row.assignee || ''),
     dueDate: String(row.due_date || ''),
     due_date: String(row.due_date || ''),
-    stage: String(row.stage || '')
+    stage: String(row.stage || ''),
+    photo_data: String(row.photo_data || ''),
+    audio_data: String(row.audio_data || '')
   };
 }
 
@@ -87,6 +123,8 @@ function describeChange(before, after) {
   compare('assignee', before.assignee, after.assignee);
   compare('due date', before.dueDate, after.dueDate);
   compare('date', before.date, after.date);
+  if (Boolean(before.photo_data) !== Boolean(after.photo_data)) changes.push('photo evidence updated');
+  if (Boolean(before.audio_data) !== Boolean(after.audio_data)) changes.push('voice note updated');
   if (String(before.details ?? '') !== String(after.details ?? '')) changes.push('details updated');
   const suffix = changes.length ? ` — ${changes.join('; ')}` : '';
   return `Updated ${short(after.title)}${suffix}`.slice(0, 500);
@@ -130,7 +168,9 @@ export default async function handler(req, res) {
         status TEXT,
         recorder TEXT,
         details TEXT,
-        created_at TEXT
+        created_at TEXT,
+        photo_data TEXT,
+        audio_data TEXT
       )
     `);
     await ensureRecordColumns(db);
@@ -200,6 +240,9 @@ export default async function handler(req, res) {
         });
       }
 
+      const photoData = cleanDataUrl(record.photo_data ?? record.photoData, 'photo');
+      const audioData = cleanDataUrl(record.audio_data ?? record.audioData, 'audio');
+
       const before = existingRow ? recordPayload(existingRow) : null;
       const version = existingRow ? (Number(existingRow.version) || 1) + 1 : 1;
       const next = {
@@ -214,7 +257,9 @@ export default async function handler(req, res) {
         version,
         assignee: record.assignee == null ? '' : String(record.assignee),
         dueDate: record.dueDate == null ? '' : String(record.dueDate),
-        stage
+        stage,
+        photo_data: photoData,
+        audio_data: audioData
       };
       const action = before ? 'update' : 'create';
       const detail = before
@@ -224,8 +269,8 @@ export default async function handler(req, res) {
       await db.batch([
         {
           sql: `INSERT OR REPLACE INTO records
-            (id, type, date, title, status, recorder, details, created_at, version, assignee, due_date, stage)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, type, date, title, status, recorder, details, created_at, version, assignee, due_date, stage, photo_data, audio_data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             next.id,
             next.type,
@@ -238,7 +283,9 @@ export default async function handler(req, res) {
             next.version,
             next.assignee,
             next.dueDate,
-            next.stage
+            next.stage,
+            next.photo_data,
+            next.audio_data
           ]
         },
         auditStatement({ id, type, action, admin, detail })

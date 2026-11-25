@@ -282,6 +282,69 @@ test('records: create, update, workflow fields, version conflict, delete, and au
   );
 });
 
+test('records: compressed photo and voice note attachments round-trip with validation', async () => {
+  const id = 'test-attachments-record';
+  const photo = 'data:image/jpeg;base64,/9j/2Q==';
+  const audio = 'data:audio/webm;codecs=opus;base64,AAAA';
+
+  const created = await call(
+    recordsHandler,
+    'POST',
+    {
+      id,
+      type: 'Incident Report',
+      date: '2026-03-03',
+      title: 'Attachment Test Record',
+      status: 'Pending',
+      details: 'Evidence note',
+      photo_data: photo,
+      audio_data: audio
+    },
+    TOKENS.secretary
+  );
+  assert.equal(created.status, 200);
+  assert.equal(created.payload.success, true);
+
+  const row = (await call(recordsHandler, 'GET', undefined, TOKENS.secretary)).payload
+    .find(item => String(item.id) === id);
+  assert.ok(row, 'record with attachments should be readable');
+  assert.equal(row.photo_data, photo);
+  assert.equal(row.audio_data, audio);
+
+  const invalidPhoto = await call(
+    recordsHandler,
+    'POST',
+    {
+      id: 'test-invalid-photo-record',
+      type: 'Incident Report',
+      date: '2026-03-03',
+      title: 'Invalid Photo',
+      details: 'Should be rejected',
+      photo_data: 'not-a-data-url'
+    },
+    TOKENS.secretary
+  );
+  assert.equal(invalidPhoto.status, 400);
+
+  const oversizedAudio = await call(
+    recordsHandler,
+    'POST',
+    {
+      id: 'test-oversized-audio-record',
+      type: 'Incident Report',
+      date: '2026-03-03',
+      title: 'Oversized Voice Note',
+      details: 'Should be rejected',
+      audio_data: `data:audio/webm;base64,${'A'.repeat(600001)}`
+    },
+    TOKENS.secretary
+  );
+  assert.equal(oversizedAudio.status, 413);
+
+  const deleted = await call(recordsHandler, 'DELETE', undefined, TOKENS.secretary, { id });
+  assert.equal(deleted.status, 200);
+});
+
 test('audit: GET only and role-based filtering', async () => {
   const post = await call(auditHandler, 'POST', {}, TOKENS.secretary);
   assert.equal(post.status, 405);

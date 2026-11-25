@@ -34,6 +34,16 @@
     let pendingRollcallConflict = null;
     let pendingRecordConflict = null;
     const shownConflictIds = new Set();
+    let pendingPhotoData = '';
+    let pendingAudioData = '';
+    let voiceRecorder = null;
+    let voiceStream = null;
+    let voiceChunks = [];
+    let voiceTimer = null;
+    let voiceStartedAt = 0;
+    const MAX_PHOTO_WIDTH = 800;
+    const PHOTO_QUALITY = 0.65;
+    const TARGET_PHOTO_MAX_BYTES = 150 * 1024;
 
     // Toast Notification System
     function showToast(message, type = 'success', duration = 3000) {
@@ -599,6 +609,8 @@
         assignee: record.assignee || '',
         dueDate: record.dueDate || '',
         stage: record.stage || '',
+        photo_data: record.photo_data || '',
+        audio_data: record.audio_data || '',
         details: JSON.stringify({
           format: 'gemyfell-record-v2',
           details: String(record.details || ''),
@@ -630,6 +642,8 @@
         assignee: row.assignee || '',
         dueDate: row.due_date || row.dueDate || '',
         stage: row.stage || '',
+        photo_data: row.photo_data || payload?.photoData || '',
+        audio_data: row.audio_data || payload?.audioData || '',
         details: payload ? payload.details : (row.details || ''),
         outcome: payload ? payload.outcome : '',
         statuses: payload ? payload.statuses : undefined,
@@ -1538,6 +1552,227 @@
       window.open(`https://wa.me/?text=${encodeURIComponent(attendanceMessage(record))}`, '_blank', 'noopener');
     }
 
+    // Photo evidence — resized to 800px and compressed for low-bandwidth sync
+    function approximateBase64Bytes(dataUrl) {
+      const text = String(dataUrl || '');
+      const comma = text.indexOf(',');
+      const payload = comma >= 0 ? text.slice(comma + 1) : '';
+      return Math.floor(payload.length * 3 / 4);
+    }
+
+    function loadImageElement(url) {
+      return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error('This photo could not be opened. Try another image.'));
+        image.src = url;
+      });
+    }
+
+    async function compressPhotoFile(file) {
+      if (!file || !String(file.type || '').startsWith('image/')) {
+        throw new Error('Choose a valid image file.');
+      }
+      const objectUrl = URL.createObjectURL(file);
+      try {
+        const image = await loadImageElement(objectUrl);
+        const naturalWidth = image.naturalWidth || image.width;
+        const naturalHeight = image.naturalHeight || image.height;
+        if (!naturalWidth || !naturalHeight) throw new Error('Could not read this photo.');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Photo compression is not supported on this device.');
+
+        let scale = Math.min(1, MAX_PHOTO_WIDTH / naturalWidth);
+        let dataUrl = '';
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const width = Math.max(320, Math.round(naturalWidth * scale));
+          const height = Math.max(1, Math.round(naturalHeight * scale));
+          canvas.width = width;
+          canvas.height = height;
+          context.fillStyle = '#ffffff';
+          context.fillRect(0, 0, width, height);
+          context.drawImage(image, 0, 0, width, height);
+          dataUrl = canvas.toDataURL('image/jpeg', PHOTO_QUALITY);
+          if (approximateBase64Bytes(dataUrl) <= TARGET_PHOTO_MAX_BYTES || width <= 320) break;
+          scale *= 0.85;
+        }
+        return dataUrl;
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+
+    async function handlePhotoSelection(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) return;
+      try {
+        const dataUrl = await compressPhotoFile(file);
+        pendingPhotoData = dataUrl;
+        const preview = document.getElementById('photo-preview');
+        if (preview) preview.src = dataUrl;
+        document.getElementById('photo-preview-wrap')?.classList.remove('hidden');
+        const size = Math.round(approximateBase64Bytes(dataUrl) / 1024);
+        showToast(`Photo compressed to about ${size} KB.`, 'success');
+      } catch (error) {
+        pendingPhotoData = '';
+        document.getElementById('photo-preview-wrap')?.classList.add('hidden');
+        showToast(error.message || 'Could not prepare this photo.', 'error');
+      } finally {
+        if (event?.target) event.target.value = '';
+      }
+    }
+
+    function removePhoto(silent = false) {
+      pendingPhotoData = '';
+      const preview = document.getElementById('photo-preview');
+      if (preview) preview.removeAttribute('src');
+      document.getElementById('photo-preview-wrap')?.classList.add('hidden');
+      const input = document.getElementById('photo-input');
+      if (input) input.value = '';
+      if (!silent) showToast('Photo removed.', 'info');
+    }
+
+    // Short voice note recorder — MediaRecorder, capped at 60 seconds
+    function voiceMimeType() {
+      if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'];
+      return candidates.find(type => MediaRecorder.isTypeSupported(type)) || '';
+    }
+
+    function updateVoiceStatus(text) {
+      const status = document.getElementById('voice-status');
+      if (status) status.textContent = text;
+    }
+
+    function formatVoiceTimer(seconds) {
+      const safe = Math.max(0, Math.min(60, seconds));
+      return `00:${String(Math.floor(safe)).padStart(2, '0')}`;
+    }
+
+    function resetVoiceControls() {
+      clearInterval(voiceTimer);
+      voiceTimer = null;
+      const toggle = document.getElementById('voice-toggle');
+      if (toggle) toggle.textContent = 'Record Voice Note (Max 60s)';
+    }
+
+    function cleanupVoiceStream() {
+      if (voiceStream) {
+        voiceStream.getTracks().forEach(track => track.stop());
+        voiceStream = null;
+      }
+      voiceRecorder = null;
+      voiceChunks = [];
+    }
+
+    async function startVoiceRecording() {
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        const message = 'Voice recording is not supported by this browser.';
+        updateVoiceStatus(message);
+        showToast(message, 'error');
+        return;
+      }
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = voiceMimeType();
+        voiceRecorder = new MediaRecorder(voiceStream, {
+          ...(mimeType ? { mimeType } : {}),
+          audioBitsPerSecond: 24000
+        });
+        voiceChunks = [];
+        voiceRecorder.ondataavailable = event => {
+          if (event.data && event.data.size) voiceChunks.push(event.data);
+        };
+        voiceRecorder.onstop = finishVoiceRecording;
+        voiceRecorder.onerror = () => {
+          showToast('Recording failed. Please try again.', 'error');
+          updateVoiceStatus('Recording failed. Try again.');
+          cleanupVoiceStream();
+          resetVoiceControls();
+        };
+        voiceRecorder.start(1000);
+        voiceStartedAt = Date.now();
+        const toggle = document.getElementById('voice-toggle');
+        if (toggle) toggle.textContent = `Stop Recording (${formatVoiceTimer(0)} / 01:00)`;
+        updateVoiceStatus('Recording… tap to stop, or it stops automatically at 01:00.');
+        clearInterval(voiceTimer);
+        voiceTimer = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - voiceStartedAt) / 1000);
+          const button = document.getElementById('voice-toggle');
+          if (button) button.textContent = `Stop Recording (${formatVoiceTimer(elapsed)} / 01:00)`;
+          if (elapsed >= 60) stopVoiceRecording();
+        }, 250);
+      } catch (error) {
+        const denied = ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(error?.name);
+        const missing = ['NotFoundError', 'DevicesNotFoundError', 'OverconstrainedError'].includes(error?.name);
+        const message = denied
+          ? 'Microphone permission was denied. Allow it in your browser settings.'
+          : missing ? 'No microphone was found on this device.'
+            : 'Could not start recording. Check your browser settings.';
+        updateVoiceStatus(message);
+        showToast(message, 'error');
+        cleanupVoiceStream();
+        resetVoiceControls();
+      }
+    }
+
+    function stopVoiceRecording() {
+      clearInterval(voiceTimer);
+      voiceTimer = null;
+      resetVoiceControls();
+      if (voiceRecorder && voiceRecorder.state !== 'inactive') voiceRecorder.stop();
+      else cleanupVoiceStream();
+    }
+
+    async function toggleVoiceRecording() {
+      if (voiceRecorder && voiceRecorder.state === 'recording') {
+        stopVoiceRecording();
+        return;
+      }
+      await startVoiceRecording();
+    }
+
+    function finishVoiceRecording() {
+      const mimeType = voiceRecorder?.mimeType || voiceChunks[0]?.type || 'audio/webm';
+      const chunks = [...voiceChunks];
+      cleanupVoiceStream();
+      const blob = new Blob(chunks, { type: mimeType });
+      if (!blob.size) {
+        updateVoiceStatus('No audio was captured. Try recording again.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        pendingAudioData = String(reader.result || '');
+        const player = document.getElementById('voice-preview');
+        if (player) {
+          player.src = pendingAudioData;
+          player.load();
+        }
+        document.getElementById('voice-player')?.classList.remove('hidden');
+        updateVoiceStatus(`Voice note ready (${formatVoiceTimer(Math.round(blob.size / 3000))}) — preview or delete it before saving.`);
+        showToast('Voice note recorded.', 'success');
+      };
+      reader.onerror = () => {
+        showToast('Could not save the voice note. Please try again.', 'error');
+        updateVoiceStatus('Voice note could not be prepared.');
+      };
+      reader.readAsDataURL(blob);
+    }
+
+    function removeVoiceNote() {
+      pendingAudioData = '';
+      const player = document.getElementById('voice-preview');
+      if (player) {
+        player.pause();
+        player.removeAttribute('src');
+        player.load();
+      }
+      document.getElementById('voice-player')?.classList.add('hidden');
+      updateVoiceStatus('No voice note recorded.');
+    }
+
     function setLogType(type) {
       const minutes = type === 'Meeting Minutes';
       document.getElementById('incident-fields').classList.toggle('hidden', minutes);
@@ -1722,8 +1957,18 @@
         document.getElementById('min-recorded-by').selectedIndex = 0;
         clearAgendaItems();
       }
+      record.photo_data = pendingPhotoData;
+      record.audio_data = pendingAudioData;
+      const attachmentBytes = approximateBase64Bytes(record.photo_data) + approximateBase64Bytes(record.audio_data);
+      const storedAttachmentBytes = getRecords().reduce((total, item) =>
+        total + approximateBase64Bytes(item.photo_data) + approximateBase64Bytes(item.audio_data), 0);
+      if (storedAttachmentBytes + attachmentBytes > 4 * 1024 * 1024) {
+        showToast('Device storage for evidence is nearly full. Export a backup before adding more.', 'warning');
+      }
       if (storeRecord(record)) {
         showToast(`${type} saved offline.`, 'success');
+        removePhoto(true);
+        removeVoiceNote();
         document.getElementById('log-type').value = 'Incident Report';
         setLogType('Incident Report');
       }
@@ -2035,6 +2280,18 @@
                 </div>`).join('')}
             </div>` : ''}
           <pre>${escapeHtml(record.details || '')}${record.outcome ? `\n\nCommittee Outcome:\n${escapeHtml(record.outcome)}` : ''}</pre>
+          ${record.photo_data ? `
+            <div class="attachment-preview">
+              <a href="${escapeHtml(record.photo_data)}" target="_blank" rel="noopener">
+                <img src="${escapeHtml(record.photo_data)}" alt="Photo evidence for ${escapeHtml(record.title)}" />
+              </a>
+              <span>Photo evidence — tap to open</span>
+            </div>` : ''}
+          ${record.audio_data ? `
+            <div class="voice-note">
+              <span>Voice note</span>
+              <audio controls src="${escapeHtml(record.audio_data)}"></audio>
+            </div>` : ''}
           ${record.type === 'Incident Report' && Array.isArray(record.stageHistory) && record.stageHistory.length ? `
             <div class="stage-history">Stages: ${record.stageHistory.map(item => `${escapeHtml(item.stage)} (${escapeHtml(new Date(item.at).toLocaleDateString())})`).join(' → ')}</div>` : ''}
           <div class="toolbar">
@@ -2219,8 +2476,8 @@
     function importRecords(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) {
-        showToast('Backup file is too large (maximum 5 MB).', 'error');
+      if (file.size > 25 * 1024 * 1024) {
+        showToast('Backup file is too large (maximum 25 MB).', 'error');
         event.target.value = '';
         return;
       }
@@ -2256,6 +2513,10 @@
               dueDate: record.dueDate == null ? '' : String(record.dueDate),
               stage: record.stage == null ? '' : String(record.stage),
               stageHistory: Array.isArray(record.stageHistory) ? record.stageHistory : [],
+              photo_data: typeof record.photo_data === 'string' ? record.photo_data
+                : typeof record.photoData === 'string' ? record.photoData : '',
+              audio_data: typeof record.audio_data === 'string' ? record.audio_data
+                : typeof record.audioData === 'string' ? record.audioData : '',
               createdAt,
               _cloudSynced: false
             };
@@ -2333,6 +2594,9 @@
     renderMessageHistory();
     updateMessagePreview();
     updateCloudStatus(!navigator.onLine ? 'offline' : 'authRequired');
+    window.addEventListener('pagehide', () => {
+      if (voiceRecorder && voiceRecorder.state === 'recording') stopVoiceRecording();
+    });
     window.addEventListener('online', () => {
       if (readAuthSession()) {
         void syncCloudRecords();

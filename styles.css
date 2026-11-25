@@ -798,6 +798,39 @@
       white-space: pre-wrap;
     }
 
+    /* Photo evidence and voice notes */
+    .attachment-preview {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+      padding: 8px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #fffdf8;
+    }
+    .attachment-preview img {
+      display: block;
+      max-width: 180px;
+      max-height: 140px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .attachment-preview audio, .voice-note audio {
+      display: block;
+      width: min(100%, 320px);
+      max-width: 320px;
+    }
+    .voice-note { margin: 10px 0; }
+    .voice-note span {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-weight: 650;
+    }
+
     /* Case workflow */
     .workflow-grid {
       display: grid;
@@ -1394,6 +1427,21 @@
       font-size: 0.95rem;
       color: var(--primary);
     }
+    .notes-card {
+      border-top: 4px solid var(--accent);
+      background: linear-gradient(180deg, #fffdf8 0%, #ffffff 42%);
+    }
+    .notes-card h2 { border-bottom-color: var(--accent-light); }
+    .notes-card p { font-size: 0.88rem; }
+    .notes-callout {
+      margin-top: 4px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius-md);
+      background: var(--primary-light);
+    }
+    .notes-callout p { margin: 0; }
+    .notes-callout .hint { margin-top: 8px; }
     .guide-example {
       margin: 0;
       padding: 12px;
@@ -1466,7 +1514,8 @@
       #tab-logs h2, #tab-logs .toolbar, #tab-logs .filter-pills, #tab-logs .search-box,
       #tab-logs .date-range, #tab-logs .audit-card,
       #tab-logs .cloud-sync-panel,
-      #tab-logs .record-actions, #tab-logs .record-item button, .nav, header,
+      #tab-logs .record-actions, #tab-logs .record-item button,
+      #tab-logs audio, #tab-logs .voice-note, .nav, header,
       .guide-button, .guide-overlay { display: none !important; }
       .print-letterhead {
         display: block !important;
@@ -1486,5 +1535,7 @@
         margin-bottom: 14px;
       }
       .record-item pre { font-size: 9pt; background: #fafafa; border: 0; }
+      #tab-logs .attachment-preview { padding: 0; border: 0; background: white; }
+      #tab-logs .attachment-preview img { max-width: 70mm; max-height: 60mm; object-fit: contain; }
     }
   
