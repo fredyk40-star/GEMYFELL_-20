@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "lint": "node scripts/check-syntax.mjs",
+    "test": "node --test tests/api.test.mjs"
+  },
   "dependencies": {
     "@libsql/client": "^0.14.0"
   }

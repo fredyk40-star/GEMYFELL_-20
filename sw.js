@@ -1,7 +1,9 @@
-const CACHE_NAME = 'gemyfell-disc-v14';
+const CACHE_NAME = 'gemyfell-disc-v16';
 const ASSETS = [
   '/',
   '/index.html',
+  '/styles.css',
+  '/app.js',
   '/manifest.json',
   '/icon.svg',
   '/icon.png',

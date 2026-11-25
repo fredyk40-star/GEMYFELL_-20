@@ -8,6 +8,7 @@ import {
 } from '../lib/auth.js';
 
 const RECORD_TYPES = new Set(['Incident Report', 'Meeting Minutes', 'Attendance']);
+const CASE_STAGES = new Set(['Open', 'Hearing', 'Ruling', 'Closed']);
 
 function canReadType(role, type) {
   if (role === 'superadmin' || role === 'secretary' || role === 'viewer') return true;
@@ -32,6 +33,63 @@ function requestBody(req) {
     }
   }
   return null;
+}
+
+async function ensureRecordColumns(db) {
+  const info = await db.execute('PRAGMA table_info(records)');
+  const columns = new Set(info.rows.map(row => String(row.name)));
+  if (!columns.has('version')) {
+    await db.execute('ALTER TABLE records ADD COLUMN version INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!columns.has('assignee')) {
+    await db.execute("ALTER TABLE records ADD COLUMN assignee TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has('due_date')) {
+    await db.execute("ALTER TABLE records ADD COLUMN due_date TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has('stage')) {
+    await db.execute("ALTER TABLE records ADD COLUMN stage TEXT NOT NULL DEFAULT ''");
+  }
+}
+
+function recordPayload(row) {
+  return {
+    id: String(row.id),
+    type: String(row.type || ''),
+    date: String(row.date || ''),
+    title: String(row.title || ''),
+    status: String(row.status || ''),
+    recorder: String(row.recorder || ''),
+    details: String(row.details || ''),
+    created_at: String(row.created_at || ''),
+    version: Number(row.version) || 1,
+    assignee: String(row.assignee || ''),
+    dueDate: String(row.due_date || ''),
+    due_date: String(row.due_date || ''),
+    stage: String(row.stage || '')
+  };
+}
+
+function short(value) {
+  const text = String(value ?? '').trim() || '—';
+  return text.length > 80 ? `${text.slice(0, 77)}...` : text;
+}
+
+function describeChange(before, after) {
+  const changes = [];
+  const compare = (label, oldValue, newValue) => {
+    if (String(oldValue ?? '') !== String(newValue ?? '')) {
+      changes.push(`${label}: ${short(oldValue)} → ${short(newValue)}`);
+    }
+  };
+  compare('status', before.status, after.status);
+  compare('stage', before.stage, after.stage);
+  compare('assignee', before.assignee, after.assignee);
+  compare('due date', before.dueDate, after.dueDate);
+  compare('date', before.date, after.date);
+  if (String(before.details ?? '') !== String(after.details ?? '')) changes.push('details updated');
+  const suffix = changes.length ? ` — ${changes.join('; ')}` : '';
+  return `Updated ${short(after.title)}${suffix}`.slice(0, 500);
 }
 
 function auditStatement(entry) {
@@ -75,6 +133,7 @@ export default async function handler(req, res) {
         created_at TEXT
       )
     `);
+    await ensureRecordColumns(db);
     await db.execute(`
       CREATE TABLE IF NOT EXISTS record_audit (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,16 +156,9 @@ export default async function handler(req, res) {
 
     if (method === 'GET') {
       const result = await db.execute('SELECT * FROM records ORDER BY created_at DESC');
-      const rows = result.rows.filter(row => canReadType(admin.role, String(row.type))).map(row => ({
-        id: row.id,
-        type: row.type,
-        date: row.date,
-        title: row.title,
-        status: row.status,
-        recorder: row.recorder,
-        details: row.details,
-        created_at: row.created_at
-      }));
+      const rows = result.rows
+        .filter(row => canReadType(admin.role, String(row.type)))
+        .map(recordPayload);
       return res.status(200).json(rows);
     }
 
@@ -122,45 +174,84 @@ export default async function handler(req, res) {
         return sendError(res, 403, 'Your role cannot create or update this record type.');
       }
 
+      const stage = record.stage == null ? '' : String(record.stage);
+      if (stage && !CASE_STAGES.has(stage)) {
+        return sendError(res, 400, 'Select a valid case stage.');
+      }
+
       const id = String(record.id);
       const type = String(record.type);
-      const existing = await db.execute({
-        sql: 'SELECT type FROM records WHERE id = ?',
+      const existingResult = await db.execute({
+        sql: 'SELECT * FROM records WHERE id = ?',
         args: [id]
       });
-      const action = existing.rows.length ? 'update' : 'create';
+      const existingRow = existingResult.rows[0];
+      const incomingVersion = Number(record.version);
+      if (
+        existingRow &&
+        Number.isInteger(incomingVersion) &&
+        incomingVersion !== (Number(existingRow.version) || 1)
+      ) {
+        return res.status(409).json({
+          success: false,
+          error: 'This record changed on another device. Refresh before editing again.',
+          code: 'VERSION_CONFLICT',
+          record: recordPayload(existingRow)
+        });
+      }
+
+      const before = existingRow ? recordPayload(existingRow) : null;
+      const version = existingRow ? (Number(existingRow.version) || 1) + 1 : 1;
+      const next = {
+        id,
+        type,
+        date: String(record.date),
+        title: String(record.title),
+        status: record.status == null ? '' : String(record.status),
+        recorder: record.recorder == null ? '' : String(record.recorder),
+        details: record.details == null ? '' : String(record.details),
+        created_at: record.created_at ? String(record.created_at) : new Date().toISOString(),
+        version,
+        assignee: record.assignee == null ? '' : String(record.assignee),
+        dueDate: record.dueDate == null ? '' : String(record.dueDate),
+        stage
+      };
+      const action = before ? 'update' : 'create';
+      const detail = before
+        ? describeChange(before, next)
+        : `Created ${short(next.title)}`;
+
       await db.batch([
         {
           sql: `INSERT OR REPLACE INTO records
-            (id, type, date, title, status, recorder, details, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            (id, type, date, title, status, recorder, details, created_at, version, assignee, due_date, stage)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
-            id,
-            type,
-            String(record.date),
-            String(record.title),
-            record.status == null ? '' : String(record.status),
-            record.recorder == null ? '' : String(record.recorder),
-            record.details == null ? '' : String(record.details),
-            record.created_at ? String(record.created_at) : new Date().toISOString()
+            next.id,
+            next.type,
+            next.date,
+            next.title,
+            next.status,
+            next.recorder,
+            next.details,
+            next.created_at,
+            next.version,
+            next.assignee,
+            next.dueDate,
+            next.stage
           ]
         },
-        auditStatement({
-          id,
-          type,
-          action,
-          admin,
-          detail: `${action === 'create' ? 'Created' : 'Updated'} ${String(record.title)}`
-        })
+        auditStatement({ id, type, action, admin, detail })
       ], 'write');
-      return res.status(200).json({ success: true });
+
+      return res.status(200).json({ success: true, version });
     }
 
     const id = typeof req.query?.id === 'string' ? req.query.id.trim() : '';
     if (!id) return sendError(res, 400, 'A record id query parameter is required.');
 
     const existing = await db.execute({
-      sql: 'SELECT type, title FROM records WHERE id = ?',
+      sql: 'SELECT type, title, version FROM records WHERE id = ?',
       args: [id]
     });
     if (existing.rows.length && !canWriteType(admin.role, String(existing.rows[0].type))) {
@@ -174,7 +265,7 @@ export default async function handler(req, res) {
         type: row ? String(row.type) : 'Unknown',
         action: 'delete',
         admin,
-        detail: row ? `Deleted ${String(row.title)}` : 'Deleted a record that was already removed'
+        detail: row ? `Deleted ${short(row.title)} (v${Number(row.version) || 1})` : 'Deleted a record that was already removed'
       })
     ], 'write');
     return res.status(200).json({ success: true });
