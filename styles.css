@@ -1473,6 +1473,9 @@
     }
     .notes-callout p { margin: 0; }
     .notes-callout .hint { margin-top: 8px; }
+    .quickstart-card { border-top: 4px solid var(--primary); }
+    .quickstart-actions { margin: 10px 0 14px; }
+    .quickstart-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .guide-example {
       margin: 0;
       padding: 12px;
@@ -1517,6 +1520,7 @@
       .nav button[data-tab="log"] svg { width: 18px; height: 18px; }
       .admin-account { grid-template-columns: 1fr; }
       .admin-account .toolbar { flex-wrap: wrap; }
+      .quickstart-flow { grid-template-columns: 1fr; }
       .summary-grid, .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
       .workflow-grid { grid-template-columns: 1fr; }
       .directory-grid { grid-template-columns: 1fr; }
@@ -1574,5 +1578,50 @@
       .record-item pre { font-size: 9pt; background: #fafafa; border: 0; }
       #tab-logs .attachment-preview { padding: 0; border: 0; background: white; }
       #tab-logs .attachment-preview img { max-width: 70mm; max-height: 60mm; object-fit: contain; }
+    }
+
+    /* One-page Quick Start sheet (printed on its own) */
+    @media print {
+      body.printing-quickstart #tab-logs,
+      body.printing-quickstart #tab-logs *,
+      body.printing-quickstart .print-letterhead {
+        visibility: hidden !important;
+        display: none !important;
+      }
+      body.printing-quickstart #tab-team {
+        display: block !important;
+        visibility: visible !important;
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+      }
+      body.printing-quickstart #tab-team > .card:not(#quickstart-card) {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body.printing-quickstart #quickstart-card {
+        display: block !important;
+        visibility: visible !important;
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: 0 !important;
+        border-top: 3px solid #5c1616 !important;
+        box-shadow: none !important;
+        background: #fff !important;
+      }
+      body.printing-quickstart #quickstart-card * { visibility: visible !important; }
+      body.printing-quickstart #quickstart-card .print-hide,
+      body.printing-quickstart #quickstart-card button { display: none !important; }
+      body.printing-quickstart .quickstart-flow { grid-template-columns: 1fr !important; }
+      body.printing-quickstart #quickstart-card .guide-step {
+        break-inside: avoid;
+        padding: 6px 8px;
+      }
+      body.printing-quickstart #quickstart-card .guide-step span { font-size: 9pt; color: #111; }
+      body.printing-quickstart #quickstart-card .hint { font-size: 8.5pt; }
     }
   

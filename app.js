@@ -2562,6 +2562,33 @@
       reader.readAsText(file);
     }
 
+    function printQuickStart() {
+      openTab('team');
+      document.body.classList.add('printing-quickstart');
+      const cleanup = () => document.body.classList.remove('printing-quickstart');
+      window.addEventListener('afterprint', cleanup, { once: true });
+      setTimeout(cleanup, 60000);
+      window.print();
+    }
+
+    function shareQuickStart() {
+      const text = [
+        '*GEMYFELL @20 — QUICK START (Secretary / Committee)*',
+        '',
+        '1. Sign in: phone number + 4-digit PIN. Temporary password? Choose a new PIN.',
+        '2. Overview: just a summary, nothing to fill.',
+        '3. Team & Rules: contacts, Code of Conduct, and Notes & Guide at the top.',
+        '4. Roll Call: pick the date, tap Present / Late / Excused / Absent, then Save Roll Call.',
+        '5. Gold + : Incident Report or Meeting Minutes. Facts only. Scroll down for photo or 60-second voice note. Then Save.',
+        '6. Messages: pick a template, fill the names, check the preview, send on WhatsApp.',
+        '7. Logs & PDF: find old records, change Pending to Resolved, print an official PDF for leadership.',
+        '8. Forgot PIN? Tap "Forgot your PIN?" and call Brother Fred or the Backup Superadmin.',
+        '',
+        'Works offline — it syncs when signal returns. Note button at bottom-right = quick help.'
+      ].join('\n');
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    }
+
     function printLogs() {
       document.getElementById('print-date').textContent = `Generated ${new Date().toLocaleString()}`;
       window.print();
